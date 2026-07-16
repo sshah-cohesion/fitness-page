@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>Fitness &amp; Wellness · Discover</title>
+  <link rel="preconnect" href="https://images.unsplash.com" crossorigin />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="view-discover">
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <div class="breadcrumb">
+        <span>Fitness</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="crumb-active" id="crumb-view">Discover</span>
+      </div>
+
+      <div class="topbar-head">
+        <div class="topbar-title">
+          <h1>Fitness &amp; Wellness</h1>
+          <p>Nearby gyms, studios, and wellness partners with member-only pricing.</p>
+        </div>
+        <nav class="tabs" aria-label="Sections">
+          <button class="tab is-active" data-tab="discover">Discover</button>
+          <button class="tab" data-tab="studios">Studios</button>
+          <button class="tab" data-tab="membership">My Membership</button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap content">
+    <!-- Featured (Discover view only) -->
+    <section class="featured only-discover">
+      <span class="section-label">FEATURED</span>
+      <article class="featured-card">
+        <div class="featured-media">
+          <img data-fallback="strength" src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1000&q=70" alt="Featured gym floor" />
+          <span class="pill pill-brand featured-badge">Grand opening offer</span>
+        </div>
+        <div class="featured-body">
+          <div class="featured-toprow">
+            <h2 id="featured-name">Vantage Athletic Club</h2>
+            <span class="rating" id="featured-rating"></span>
+          </div>
+          <a class="addr" id="featured-addr" href="#" target="_blank" rel="noopener">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 21s-7-6.3-7-11a7 7 0 1 1 14 0c0 4.7-7 11-7 11Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="10" r="2.4" stroke="currentColor" stroke-width="2"/></svg>
+            <span class="addr-txt">360 West Hubbard Street, Chicago · 0.2 mi from Main Lobby</span>
+          </a>
+          <span class="member-perk">MEMBER PERK</span>
+          <h3>Waived $250 enrollment + first month free</h3>
+          <p>Full-service athletic club with a lap pool, strength floor, group fitness, and recovery spa — exclusive pricing for building members.</p>
+          <button class="btn btn-primary" data-buy="featured">View membership</button>
+        </div>
+      </article>
+    </section>
+
+    <!-- Studios heading (Studios view only) -->
+    <div class="view-heading only-studios">
+      <span class="section-label">ALL STUDIOS</span>
+      <h2>Nearby fitness &amp; wellness partners</h2>
+    </div>
+
+    <!-- Filters (Discover + Studios) -->
+    <section class="filters not-membership">
+      <div class="chips" id="chips">
+        <button class="chip chip-all is-active" data-filter="all">All
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="chip" data-filter="new"><span class="dot dot-green"></span>New offer</button>
+        <button class="chip" data-filter="popular"><span class="dot dot-red"></span>Popular</button>
+        <button class="chip" data-filter="limited"><span class="dot dot-amber"></span>Limited spots</button>
+        <button class="chip" data-filter="strength">Strength</button>
+        <button class="chip" data-filter="yoga">Yoga &amp; Pilates</button>
+        <button class="chip" data-filter="cycle">Cycle</button>
+        <button class="chip" data-filter="boxing">Boxing</button>
+      </div>
+      <label class="search">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m20 20-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="search" type="search" placeholder="Search nearby" autocomplete="off" />
+      </label>
+    </section>
+
+    <!-- Catalog grid (Discover + Studios) -->
+    <section class="grid not-membership" id="grid" aria-live="polite"></section>
+    <p class="empty not-membership" id="empty" hidden>No studios match your filters.</p>
+
+    <!-- My Membership view -->
+    <section class="membership-view only-membership" id="membershipView">
+      <div class="view-heading">
+        <span class="section-label">MY MEMBERSHIP</span>
+        <h2>Your active passes</h2>
+      </div>
+      <div id="mm-list" class="mm-list"></div>
+      <div id="mm-empty" class="mm-empty">
+        <div class="mm-empty-icon">
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M6.5 9a5.5 5.5 0 0 1 11 0v1.2c0 .9.3 1.7.9 2.4l.6.7c.9 1.1.1 2.7-1.3 2.7H6.3c-1.4 0-2.2-1.6-1.3-2.7l.6-.7c.6-.7.9-1.5.9-2.4V9Z" stroke="currentColor" stroke-width="1.8"/><path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </div>
+        <h3>No memberships yet</h3>
+        <p>Buy a membership from Discover and it'll show up here as a digital pass.</p>
+        <button class="btn btn-primary" data-goto="discover">Browse studios</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap foot">
+    <span>Powered by your building community · Prices shown are member rates.</span>
+  </footer>
+
+  <!-- Membership modal -->
+  <div class="modal" id="modal" hidden>
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="m-title">
+      <button class="modal-close" data-close aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <div class="modal-hero">
+        <img id="m-img" data-fallback="strength" src="" alt="" />
+        <div class="modal-hero-overlay">
+          <h2 id="m-title">Membership</h2>
+          <p id="m-sub"></p>
+        </div>
+      </div>
+      <div class="modal-body" id="m-body">
+        <div class="tiers" id="m-tiers"></div>
+        <div class="checkout" id="m-checkout" hidden>
+          <div class="checkout-summary">
+            <span>You selected</span>
+            <strong id="m-selected"></strong>
+          </div>
+          <button class="btn btn-primary btn-block" id="m-confirm">Confirm &amp; buy</button>
+          <p class="fineprint">Billed to your building account. Cancel anytime from My Membership.</p>
+        </div>
+        <div class="success" id="m-success" hidden>
+          <div class="success-check">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17.5 19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>You're in!</h3>
+          <p id="m-success-text"></p>
+          <button class="btn btn-primary btn-block" data-goto="membership" data-close>View my membership</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
