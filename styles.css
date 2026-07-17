@@ -463,18 +463,6 @@ body.view-passes .not-passes { display: none; }
   justify-content: center;
 }
 .btn-block { width: 100%; padding: 13px; font-size: 14.5px; }
-.btn-wallet {
-  background: #111;
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  box-shadow: var(--shadow-sm);
-}
-.btn-wallet:hover { filter: brightness(1.08); }
-.btn-wallet:disabled { opacity: .6; cursor: default; }
-.wallet-icon { flex-shrink: 0; }
 .icon-btn {
   width: 34px;
   height: 34px;
