@@ -1,33 +1,32 @@
 (function () {
   "use strict";
 
+  var BUILDING = window.BUILDING || { name: "125 Park Avenue", address: "125 Park Avenue, New York, NY 10017", short: "125 Park Ave" };
   var BUILDING_GYMS = window.BUILDING_GYMS || [];
   var GYMS = window.GYMS || [];
   var EVENT_TEMPLATES = window.EVENT_TEMPLATES || [];
-  var STORE_KEY = "fitness_building_gyms";
-  var RSVP_KEY = "fitness_event_rsvps";
+  var STORE_KEY = "fitness_v2_gym_passes";
+  var RSVP_KEY = "fitness_v2_event_rsvps";
+  var VIEWS = { discover: "Discover", events: "Events", studios: "Studios", passes: "My Passes" };
 
   var state = {
     filter: "all",
     query: "",
     view: "discover",
-    activeGym: null,
     calMonth: null,
     selectedDate: null,
     events: [],
+    sheet: null,
   };
 
   var grid = document.getElementById("grid");
   var empty = document.getElementById("empty");
   var chipsWrap = document.getElementById("chips");
   var searchInput = document.getElementById("search");
-  var modal = document.getElementById("modal");
-  var eventModal = document.getElementById("event-modal");
+  var sheet = document.getElementById("sheet");
+  var sheetBody = document.getElementById("sheet-body");
   var toastEl = document.getElementById("toast");
-  var mmList = document.getElementById("mm-list");
-  var mmEmpty = document.getElementById("mm-empty");
   var toastTimer = null;
-  var activeEventId = null;
 
   var FALLBACKS = {
     strength: "linear-gradient(135deg,#4c5bd4,#7a5cff)",
@@ -54,8 +53,8 @@
   }
   function shortAddr(a) {
     return a
-      .replace(/,\s*MA\s*\d{5}$/, "")
-      .replace(/,\s*Cambridge.*$/, ", Cambridge")
+      .replace(/,\s*NY\s*\d{5}$/, "")
+      .replace(/,\s*New York.*$/, ", New York")
       .replace(/\s·\s.*$/, "");
   }
   function pad(n) { return n < 10 ? "0" + n : String(n); }
@@ -85,6 +84,16 @@
   function formatLongDate(d) {
     return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
   }
+  function formatShortDate(d) {
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
 
   function starSvg() {
     return '<svg class="star" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.3l6.5-.9L12 2.5z"/></svg>';
@@ -103,9 +112,62 @@
 
   function badgePill(b) {
     var cls = { new: "pill-new", popular: "pill-popular", limited: "pill-limited" }[b.type] || "";
-    return '<span class="pill ' + cls + '">' + b.label + "</span>";
+    return '<span class="pill ' + cls + '">' + escapeHtml(b.label) + "</span>";
   }
 
+  function passCode(gymId) {
+    var raw = "COH|" + BUILDING.short + "|" + gymId + "|" + Date.now().toString(36).toUpperCase();
+    return raw;
+  }
+
+  function memberIdFromCode(code) {
+    var hash = 0;
+    for (var i = 0; i < code.length; i++) hash = ((hash << 5) - hash) + code.charCodeAt(i);
+    var n = Math.abs(hash % 1000000);
+    return "PA-" + pad(Math.floor(n / 1000)) + "-" + pad(n % 1000);
+  }
+
+  // ---------- Storage ----------
+  function getPasses() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }
+    catch (e) { return []; }
+  }
+  function savePass(entry) {
+    var all = getPasses();
+    if (all.some(function (x) { return x.id === entry.id; })) return false;
+    all.unshift(entry);
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(all)); } catch (e) {}
+    return true;
+  }
+  function isSignedUp(id) {
+    return getPasses().some(function (x) { return x.id === id; });
+  }
+  function getPass(id) {
+    return getPasses().find(function (x) { return x.id === id; });
+  }
+
+  function getRsvps() {
+    try { return JSON.parse(localStorage.getItem(RSVP_KEY)) || []; }
+    catch (e) { return []; }
+  }
+  function setRsvps(all) {
+    try { localStorage.setItem(RSVP_KEY, JSON.stringify(all)); } catch (e) {}
+  }
+  function hasRsvp(eventId) {
+    return getRsvps().indexOf(eventId) >= 0;
+  }
+  function addRsvp(eventId) {
+    var all = getRsvps();
+    if (all.indexOf(eventId) === -1) {
+      all.push(eventId);
+      setRsvps(all);
+    }
+  }
+  function removeRsvp(eventId) {
+    setRsvps(getRsvps().filter(function (id) { return id !== eventId; }));
+  }
+
+  // ---------- Events data ----------
   function buildEvents() {
     var today = startOfDay(new Date());
     state.events = EVENT_TEMPLATES.map(function (t) {
@@ -124,43 +186,154 @@
       };
     });
   }
-
   function eventsOn(date) {
     var key = dateKey(date);
     return state.events.filter(function (e) { return e.key === key; });
   }
-
-  function getSignups() {
-    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }
-    catch (e) { return []; }
-  }
-  function saveSignup(entry) {
-    var all = getSignups();
-    if (all.some(function (x) { return x.id === entry.id; })) return false;
-    all.unshift(entry);
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(all)); } catch (e) {}
-    return true;
-  }
-  function isSignedUp(id) {
-    return getSignups().some(function (x) { return x.id === id; });
+  function findEvent(id) {
+    return state.events.find(function (e) { return e.id === id; });
   }
 
-  function getRsvps() {
-    try { return JSON.parse(localStorage.getItem(RSVP_KEY)) || []; }
-    catch (e) { return []; }
+  // ---------- Sheet (no history stack) ----------
+  function openSheet(html, opts) {
+    sheetBody.innerHTML = html;
+    sheet.hidden = false;
+    document.body.classList.add("sheet-open");
+    state.sheet = (opts && opts.kind) || "generic";
+    if (opts && opts.afterRender) opts.afterRender(sheetBody);
   }
-  function toggleRsvp(eventId) {
-    var all = getRsvps();
-    var idx = all.indexOf(eventId);
-    if (idx >= 0) all.splice(idx, 1);
-    else all.push(eventId);
-    try { localStorage.setItem(RSVP_KEY, JSON.stringify(all)); } catch (e) {}
-    return all.indexOf(eventId) >= 0;
-  }
-  function hasRsvp(eventId) {
-    return getRsvps().indexOf(eventId) >= 0;
+  function closeSheet() {
+    sheet.hidden = true;
+    sheetBody.innerHTML = "";
+    document.body.classList.remove("sheet-open");
+    state.sheet = null;
   }
 
+  function renderQrCanvas(container, payload) {
+    var canvas = container.querySelector("canvas");
+    if (!canvas || typeof QRCode === "undefined") {
+      if (container) {
+        container.innerHTML =
+          '<img class="qr-fallback" alt="Access QR" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' +
+          encodeURIComponent(payload) + '" />';
+      }
+      return;
+    }
+    QRCode.toCanvas(canvas, payload, {
+      width: 200,
+      margin: 1,
+      color: { dark: "#1c2230", light: "#ffffff" },
+    }, function () {});
+  }
+
+  // ---------- Signup / QR ----------
+  function openSignupSheet(gym) {
+    var existing = getPass(gym.id);
+    if (existing) {
+      openPassSheet(existing);
+      return;
+    }
+    openSheet(
+      '<div class="sheet-hero">' +
+        '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="" />' +
+        '<div class="sheet-hero-overlay">' +
+          '<span class="pill pill-free">Free for tenants</span>' +
+          '<h2 id="sheet-title">' + escapeHtml(gym.name) + "</h2>" +
+          "<p>" + escapeHtml(gym.location) + " · " + escapeHtml(gym.hours) + "</p>" +
+        "</div>" +
+      "</div>" +
+      '<div class="sheet-pad">' +
+        '<p class="modal-tagline">' + escapeHtml(gym.tagline) + "</p>" +
+        '<ul class="perk-list">' +
+          (gym.perks || []).map(function (p) {
+            return "<li><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M5 12.5 10 17.5 19 7\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>" +
+              escapeHtml(p) + "</li>";
+          }).join("") +
+        "</ul>" +
+        '<div class="signup-summary">' +
+          "<div><strong>Tenant access pass</strong><span>Complimentary · QR code after signup</span></div>" +
+          '<span class="free-badge">Free</span>' +
+        "</div>" +
+        '<button class="btn btn-primary btn-block" type="button" data-confirm-signup="' + gym.id + '">Sign up free</button>' +
+        '<p class="fineprint">Linked to your building profile. Manage anytime from My Passes.</p>' +
+      "</div>",
+      {
+        kind: "signup",
+        afterRender: function (root) { wireFallback(root.querySelector("img")); },
+      }
+    );
+  }
+
+  function confirmSignup(gymId) {
+    var gym = BUILDING_GYMS.find(function (g) { return g.id === gymId; });
+    if (!gym || isSignedUp(gymId)) return;
+    var code = passCode(gymId);
+    var entry = {
+      id: gym.id,
+      name: gym.name,
+      location: gym.location,
+      img: gym.img,
+      fallback: gym.fallback,
+      code: code,
+      memberId: memberIdFromCode(code),
+      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    };
+    savePass(entry);
+    toast("You're in — QR pass ready");
+    openPassSheet(entry, { justJoined: true });
+    renderBuildingGyms();
+    if (state.view === "passes") renderPasses();
+  }
+
+  function openPassSheet(pass, opts) {
+    openSheet(
+      '<div class="pass-sheet">' +
+        (opts && opts.justJoined ? '<p class="pass-banner">You\'re signed up</p>' : "") +
+        '<h2 id="sheet-title">' + escapeHtml(pass.name) + "</h2>" +
+        '<p class="pass-sub">Show this QR at the door for access</p>' +
+        '<div class="qr-wrap" id="qr-wrap"><canvas></canvas></div>' +
+        '<div class="pass-meta">' +
+          "<div><span>Member ID</span><strong>" + escapeHtml(pass.memberId) + "</strong></div>" +
+          "<div><span>Location</span><strong>" + escapeHtml(pass.location) + "</strong></div>" +
+          "<div><span>Building</span><strong>" + escapeHtml(BUILDING.name) + "</strong></div>" +
+          "<div><span>Status</span><strong class=\"ok\">Active</strong></div>" +
+        "</div>" +
+        '<button class="btn btn-primary btn-block" type="button" data-sheet-close>Done</button>' +
+        '<button class="btn btn-ghost btn-block" type="button" data-goto="passes" data-sheet-close>View in My Passes</button>' +
+      "</div>",
+      {
+        kind: "pass",
+        afterRender: function (root) {
+          renderQrCanvas(root.querySelector("#qr-wrap"), pass.code);
+        },
+      }
+    );
+  }
+
+  function openEventSheet(ev) {
+    var going = hasRsvp(ev.id);
+    openSheet(
+      '<div class="event-sheet">' +
+        '<span class="type-pill type-' + ev.type + '">' + (TYPE_LABELS[ev.type] || ev.type) + "</span>" +
+        '<h2 id="sheet-title">' + escapeHtml(ev.title) + "</h2>" +
+        '<p class="event-modal-desc">' + escapeHtml(ev.description) + "</p>" +
+        '<dl class="event-meta">' +
+          "<div><dt>When</dt><dd>" + escapeHtml(formatLongDate(ev.date) + " · " + ev.time) + "</dd></div>" +
+          "<div><dt>Where</dt><dd>" + escapeHtml(ev.place) + "</dd></div>" +
+          "<div><dt>Spots</dt><dd>" + ev.spots + " tenant spots</dd></div>" +
+        "</dl>" +
+        (going
+          ? '<div class="rsvp-confirmed"><strong>You\'re going</strong><span>Saved in My Passes</span></div>' +
+            '<button class="btn btn-primary btn-block" type="button" data-goto="passes" data-sheet-close>View My Passes</button>' +
+            '<button class="btn btn-ghost btn-block" type="button" data-cancel-rsvp="' + ev.id + '">Cancel RSVP</button>'
+          : '<button class="btn btn-primary btn-block" type="button" data-confirm-rsvp="' + ev.id + '">RSVP free</button>') +
+        '<p class="fineprint">Free for building tenants. Reminder morning-of.</p>' +
+      "</div>",
+      { kind: "event" }
+    );
+  }
+
+  // ---------- Rendering ----------
   function matches(gym) {
     var f = state.filter;
     var okFilter = f === "all" || (gym.tags || []).indexOf(f) !== -1;
@@ -179,32 +352,23 @@
     BUILDING_GYMS.forEach(function (gym, i) {
       var signed = isSignedUp(gym.id);
       var card = document.createElement("article");
-      card.className = "building-card" + (i === 0 ? " is-featured" : "");
-      card.style.animationDelay = (i * 80) + "ms";
+      card.className = "building-card";
+      card.style.animationDelay = (i * 60) + "ms";
       card.innerHTML =
         '<div class="building-media">' +
-          '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="' + gym.name + '" />' +
-          '<span class="pill pill-free">Free signup</span>' +
+          '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="' + escapeHtml(gym.name) + '" />' +
+          '<span class="pill pill-free">' + (signed ? "Your pass" : "Free signup") + "</span>" +
         "</div>" +
         '<div class="building-body">' +
-          '<div class="building-top">' +
-            "<div>" +
-              '<span class="building-cat">' + gym.category + "</span>" +
-              "<h3>" + gym.name + "</h3>" +
-            "</div>" +
-            '<span class="rating">' + starSvg() + gym.rating.toFixed(1) +
-              ' <span class="rev">(' + gym.reviews + ")</span></span>" +
-          "</div>" +
-          '<p class="building-tagline">' + gym.tagline + "</p>" +
-          '<ul class="building-meta">' +
-            "<li>" + gym.location + "</li>" +
-            "<li>" + gym.hours + "</li>" +
-          "</ul>" +
+          '<span class="building-cat">' + escapeHtml(gym.category) + "</span>" +
+          "<h3>" + escapeHtml(gym.name) + "</h3>" +
+          '<p class="building-tagline">' + escapeHtml(gym.tagline) + "</p>" +
+          '<ul class="building-meta"><li>' + escapeHtml(gym.location) + "</li><li>" + escapeHtml(gym.hours) + "</li></ul>" +
           '<div class="building-actions">' +
             (signed
-              ? '<button class="btn btn-ghost" data-goto="membership">View access pass</button>'
-              : '<button class="btn btn-primary" data-signup="' + gym.id + '">Sign up free</button>') +
-            (signed ? '<span class="signed-chip">Signed up</span>' : "") +
+              ? '<button class="btn btn-primary" type="button" data-show-pass="' + gym.id + '">Show QR pass</button>'
+              : '<button class="btn btn-primary" type="button" data-signup="' + gym.id + '">Sign up free</button>') +
+            (signed ? '<span class="signed-chip">Active</span>' : "") +
           "</div>" +
         "</div>";
       wrap.appendChild(card);
@@ -216,14 +380,13 @@
     var list = document.getElementById("teaser-list");
     if (!list) return;
     var today = startOfDay(new Date());
-    var upcoming = state.events
-      .filter(function (e) { return e.date >= today; })
-      .slice(0, 4);
+    var upcoming = state.events.filter(function (e) { return e.date >= today; }).slice(0, 4);
     list.innerHTML = "";
     upcoming.forEach(function (ev, i) {
       var el = document.createElement("button");
+      el.type = "button";
       el.className = "teaser-card";
-      el.style.animationDelay = (i * 60) + "ms";
+      el.style.animationDelay = (i * 50) + "ms";
       el.setAttribute("data-event", ev.id);
       el.innerHTML =
         '<div class="teaser-date">' +
@@ -232,8 +395,8 @@
         "</div>" +
         '<div class="teaser-info">' +
           '<span class="type-pill type-' + ev.type + '">' + (TYPE_LABELS[ev.type] || ev.type) + "</span>" +
-          "<strong>" + ev.title + "</strong>" +
-          '<span class="teaser-meta">' + ev.time + " · " + ev.place + "</span>" +
+          "<strong>" + escapeHtml(ev.title) + "</strong>" +
+          '<span class="teaser-meta">' + escapeHtml(ev.time) + (hasRsvp(ev.id) ? " · Going" : "") + "</span>" +
         "</div>";
       list.appendChild(el);
     });
@@ -244,27 +407,26 @@
     if (state.view === "discover") list = list.slice(0, 4);
     grid.innerHTML = "";
     empty.hidden = list.length !== 0;
-
     list.forEach(function (gym) {
       var card = document.createElement("article");
       card.className = "card";
       card.innerHTML =
         '<div class="card-media">' +
-          '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="' + gym.name + '" loading="lazy" />' +
+          '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="' + escapeHtml(gym.name) + '" loading="lazy" />' +
           '<div class="card-badges">' + (gym.badges || []).map(badgePill).join("") + "</div>" +
           '<span class="card-rating">' + starSvg() + gym.rating.toFixed(1) + "</span>" +
         "</div>" +
         '<div class="card-body">' +
-          "<h4>" + gym.name + "</h4>" +
-          '<span class="card-cat">' + gym.category + "</span>" +
-          '<a class="addr" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' +
+          "<h4>" + escapeHtml(gym.name) + "</h4>" +
+          '<span class="card-cat">' + escapeHtml(gym.category) + "</span>" +
+          '<a class="addr" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener">' +
             '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 21s-7-6.3-7-11a7 7 0 1 1 14 0c0 4.7-7 11-7 11Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="10" r="2.4" stroke="currentColor" stroke-width="2"/></svg>' +
-            '<span class="addr-txt">' + shortAddr(gym.address) + "</span>" +
+            '<span class="addr-txt">' + escapeHtml(shortAddr(gym.address)) + "</span>" +
           "</a>" +
-          '<span class="card-dist">' + gym.distance + "</span>" +
+          '<span class="card-dist">' + escapeHtml(gym.distance) + "</span>" +
           '<div class="card-foot">' +
-            '<span class="card-blurb">' + gym.tagline + "</span>" +
-            '<a class="btn btn-ghost" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">Directions</a>' +
+            '<span class="card-blurb">' + escapeHtml(gym.tagline) + "</span>" +
+            '<a class="btn btn-ghost" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener">Directions</a>' +
           "</div>" +
         "</div>";
       grid.appendChild(card);
@@ -272,40 +434,45 @@
     });
   }
 
-  function renderMemberships() {
-    var all = getSignups();
-    mmEmpty.hidden = all.length !== 0;
-    mmList.innerHTML = "";
-    all.forEach(function (m) {
-      var el = document.createElement("div");
-      el.className = "mm-card";
-      el.innerHTML =
-        '<img class="mm-thumb" data-fallback="' + m.fallback + '" src="' + m.img + '" alt="' + m.name + '" />' +
-        '<div class="mm-info">' +
-          "<h4>" + m.name + "</h4>" +
-          '<div class="mm-tier">Free resident access</div>' +
-          '<div class="mm-meta">' + m.location + " · Joined " + m.date + "</div>" +
-          '<span class="mm-status">' +
-            '<svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17.5 19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Active</span>' +
-        "</div>";
-      mmList.appendChild(el);
-      wireFallback(el.querySelector("img"));
-    });
+  function renderWeekStrip() {
+    var strip = document.getElementById("week-strip");
+    if (!strip) return;
+    var today = startOfDay(new Date());
+    strip.innerHTML = "";
+    for (var i = 0; i < 7; i++) {
+      var d = addDays(today, i);
+      var count = eventsOn(d).length;
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "week-day";
+      if (sameDay(d, state.selectedDate)) btn.classList.add("is-selected");
+      if (sameDay(d, today)) btn.classList.add("is-today");
+      btn.innerHTML =
+        '<span class="wd-dow">' + d.toLocaleDateString("en-US", { weekday: "short" }) + "</span>" +
+        '<span class="wd-num">' + d.getDate() + "</span>" +
+        (count ? '<span class="wd-dot"></span>' : '<span class="wd-dot empty"></span>');
+      (function (day) {
+        btn.addEventListener("click", function () {
+          state.selectedDate = day;
+          state.calMonth = new Date(day.getFullYear(), day.getMonth(), 1);
+          renderCalendar();
+          renderWeekStrip();
+        });
+      })(d);
+      strip.appendChild(btn);
+    }
   }
 
-  // ---------- Calendar ----------
   function renderCalendar() {
     var month = state.calMonth;
     var label = document.getElementById("cal-month-label");
     var calGrid = document.getElementById("cal-grid");
     if (!label || !calGrid) return;
-
     label.textContent = MONTHS[month.getMonth()] + " " + month.getFullYear();
 
     var first = new Date(month.getFullYear(), month.getMonth(), 1);
     var start = new Date(first);
     start.setDate(1 - first.getDay());
-
     var today = startOfDay(new Date());
     calGrid.innerHTML = "";
 
@@ -314,41 +481,30 @@
       var inMonth = day.getMonth() === month.getMonth();
       var dayEvents = eventsOn(day);
       var btn = document.createElement("button");
-      btn.className = "cal-day";
       btn.type = "button";
+      btn.className = "cal-day";
       btn.setAttribute("role", "gridcell");
       if (!inMonth) btn.classList.add("is-outside");
       if (sameDay(day, today)) btn.classList.add("is-today");
       if (sameDay(day, state.selectedDate)) btn.classList.add("is-selected");
       if (dayEvents.length) btn.classList.add("has-events");
-
       var dots = dayEvents.slice(0, 3).map(function (e) {
         return '<span class="cal-dot type-' + e.type + '"></span>';
       }).join("");
-
-      btn.innerHTML =
-        '<span class="cal-num">' + day.getDate() + "</span>" +
+      btn.innerHTML = '<span class="cal-num">' + day.getDate() + "</span>" +
         (dots ? '<span class="cal-dots">' + dots + "</span>" : "");
-
       (function (d) {
         btn.addEventListener("click", function () {
           state.selectedDate = d;
           if (d.getMonth() !== state.calMonth.getMonth()) {
             state.calMonth = new Date(d.getFullYear(), d.getMonth(), 1);
-            renderCalendar();
-          } else {
-            Array.prototype.forEach.call(calGrid.querySelectorAll(".cal-day"), function (el) {
-              el.classList.remove("is-selected");
-            });
-            btn.classList.add("is-selected");
-            renderDayEvents();
           }
+          renderCalendar();
+          renderWeekStrip();
         });
       })(day);
-
       calGrid.appendChild(btn);
     }
-
     renderDayEvents();
   }
 
@@ -357,161 +513,129 @@
     var list = document.getElementById("event-day-list");
     var emptyEl = document.getElementById("event-empty");
     if (!list || !dayLabel) return;
-
     var day = state.selectedDate || startOfDay(new Date());
     dayLabel.textContent = formatDayLabel(day);
     var items = eventsOn(day);
     list.innerHTML = "";
     emptyEl.hidden = items.length !== 0;
-
     items.forEach(function (ev, i) {
       var el = document.createElement("button");
+      el.type = "button";
       el.className = "event-row";
-      el.style.animationDelay = (i * 50) + "ms";
+      el.style.animationDelay = (i * 40) + "ms";
       el.setAttribute("data-event", ev.id);
       el.innerHTML =
         '<span class="event-rail type-' + ev.type + '"></span>' +
         '<div class="event-row-body">' +
           '<div class="event-row-top">' +
-            "<strong>" + ev.title + "</strong>" +
+            "<strong>" + escapeHtml(ev.title) + "</strong>" +
             (hasRsvp(ev.id) ? '<span class="rsvp-chip">Going</span>' : "") +
           "</div>" +
-          '<span class="event-row-meta">' + ev.time + "</span>" +
-          '<span class="event-row-meta">' + ev.place + " · " + ev.spots + " spots</span>" +
+          '<span class="event-row-meta">' + escapeHtml(ev.time) + "</span>" +
+          '<span class="event-row-meta">' + escapeHtml(ev.place) + "</span>" +
         "</div>";
       list.appendChild(el);
     });
   }
 
-  // ---------- Views ----------
-  var VIEW_LABELS = {
-    discover: "Discover",
-    events: "Events",
-    studios: "Studios",
-    membership: "My Gyms",
-  };
+  function renderPasses() {
+    var passes = getPasses();
+    var mmList = document.getElementById("mm-list");
+    var mmEmpty = document.getElementById("mm-empty");
+    var gymCount = document.getElementById("gym-count");
+    mmEmpty.hidden = passes.length !== 0;
+    gymCount.textContent = String(passes.length);
+    mmList.innerHTML = "";
+    passes.forEach(function (m) {
+      var el = document.createElement("button");
+      el.type = "button";
+      el.className = "mm-card is-button";
+      el.setAttribute("data-show-pass", m.id);
+      el.innerHTML =
+        '<img class="mm-thumb" data-fallback="' + m.fallback + '" src="' + m.img + '" alt="" />' +
+        '<div class="mm-info">' +
+          "<h4>" + escapeHtml(m.name) + "</h4>" +
+          '<div class="mm-tier">QR access pass</div>' +
+          '<div class="mm-meta">' + escapeHtml(m.location) + " · " + escapeHtml(m.memberId) + "</div>" +
+          '<span class="mm-status">Active · Tap to show QR</span>' +
+        "</div>";
+      mmList.appendChild(el);
+      wireFallback(el.querySelector("img"));
+    });
+
+    var rsvpIds = getRsvps();
+    var rsvpList = document.getElementById("rsvp-list");
+    var rsvpEmpty = document.getElementById("rsvp-empty");
+    var rsvpCount = document.getElementById("rsvp-count");
+    var upcoming = rsvpIds
+      .map(findEvent)
+      .filter(Boolean)
+      .sort(function (a, b) { return a.date - b.date; });
+    rsvpCount.textContent = String(upcoming.length);
+    rsvpEmpty.hidden = upcoming.length !== 0;
+    rsvpList.innerHTML = "";
+    upcoming.forEach(function (ev) {
+      var el = document.createElement("button");
+      el.type = "button";
+      el.className = "rsvp-card";
+      el.setAttribute("data-event", ev.id);
+      el.innerHTML =
+        '<div class="rsvp-date">' +
+          '<span>' + ev.date.toLocaleDateString("en-US", { weekday: "short" }) + "</span>" +
+          "<strong>" + formatShortDate(ev.date) + "</strong>" +
+        "</div>" +
+        '<div class="rsvp-info">' +
+          '<span class="type-pill type-' + ev.type + '">' + (TYPE_LABELS[ev.type] || ev.type) + "</span>" +
+          "<strong>" + escapeHtml(ev.title) + "</strong>" +
+          '<span class="rsvp-meta">' + escapeHtml(ev.time) + " · " + escapeHtml(ev.place) + "</span>" +
+          '<span class="rsvp-chip">Going</span>' +
+        "</div>";
+      rsvpList.appendChild(el);
+    });
+  }
+
+  // ---------- Views: replaceState so Back leaves the custom link ----------
+  function syncUrl(view, replace) {
+    var url = location.pathname + location.search + "#" + view;
+    if (replace || location.hash.replace(/^#/, "") === view) {
+      history.replaceState({ view: view }, "", url);
+    } else {
+      // Still replace — tabs should never stack history inside the embed
+      history.replaceState({ view: view }, "", url);
+    }
+  }
 
   function setView(view, opts) {
-    if (!VIEW_LABELS[view]) view = "discover";
+    if (!VIEWS[view]) view = "discover";
     state.view = view;
-    document.body.className = "view-" + view;
+    document.body.className = "view-" + view + " embed" + (document.body.classList.contains("sheet-open") ? " sheet-open" : "");
     Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (t) {
       t.classList.toggle("is-active", t.getAttribute("data-tab") === view);
     });
-    var crumb = document.getElementById("crumb-view");
-    if (crumb) crumb.textContent = VIEW_LABELS[view];
-    document.title = "Fitness · " + VIEW_LABELS[view];
+    document.title = "Fitness · " + VIEWS[view];
 
-    if (!(opts && opts.fromHash) && location.hash.replace(/^#/, "") !== view) {
-      location.hash = view;
-    }
+    if (!(opts && opts.fromHash)) syncUrl(view, true);
 
-    if (view === "membership") renderMemberships();
-    else if (view === "events") renderCalendar();
-    else {
+    if (view === "passes") renderPasses();
+    else if (view === "events") {
+      renderWeekStrip();
+      renderCalendar();
+    } else {
       renderBuildingGyms();
       renderTeaser();
       renderGrid();
     }
 
-    if (!(opts && opts.silent)) window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  // ---------- Signup modal ----------
-  function openSignup(gym) {
-    state.activeGym = gym;
-    document.getElementById("m-title").textContent = gym.name;
-    document.getElementById("m-sub").textContent = gym.location + " · " + gym.hours;
-    document.getElementById("m-tagline").textContent = gym.tagline;
-
-    var img = document.getElementById("m-img");
-    img.setAttribute("data-fallback", gym.fallback);
-    img.style.display = "";
-    img.parentElement.style.background = "";
-    img.src = gym.img;
-    img.alt = gym.name;
-    wireFallback(img);
-
-    var perks = document.getElementById("m-perks");
-    perks.innerHTML = (gym.perks || []).map(function (p) {
-      return "<li>" +
-        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12.5 10 17.5 19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-        p + "</li>";
-    }).join("");
-
-    document.getElementById("m-signup").hidden = false;
-    document.getElementById("m-success").hidden = true;
-    var confirmBtn = document.getElementById("m-confirm");
-    if (isSignedUp(gym.id)) {
-      confirmBtn.textContent = "Already signed up";
-      confirmBtn.disabled = true;
-    } else {
-      confirmBtn.textContent = "Sign up free";
-      confirmBtn.disabled = false;
+    if (!(opts && opts.silent)) {
+      window.scrollTo(0, 0);
     }
-
-    modal.hidden = false;
-    document.body.style.overflow = "hidden";
-  }
-
-  function confirmSignup() {
-    var gym = state.activeGym;
-    if (!gym || isSignedUp(gym.id)) return;
-    saveSignup({
-      id: gym.id,
-      name: gym.name,
-      location: gym.location,
-      img: gym.img,
-      fallback: gym.fallback,
-      date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-    });
-    document.getElementById("m-signup").hidden = true;
-    document.getElementById("m-success-text").textContent =
-      "Your free access to " + gym.name + " is ready. Find your pass in My Gyms.";
-    document.getElementById("m-success").hidden = false;
-    renderBuildingGyms();
-    toast("Signed up — free resident access unlocked");
-  }
-
-  function closeModal() {
-    modal.hidden = true;
-    document.body.style.overflow = "";
-  }
-
-  function findEvent(id) {
-    return state.events.find(function (e) { return e.id === id; });
-  }
-
-  function openEvent(id) {
-    var ev = findEvent(id);
-    if (!ev) return;
-    activeEventId = id;
-    document.getElementById("e-title").textContent = ev.title;
-    document.getElementById("e-desc").textContent = ev.description;
-    document.getElementById("e-when").textContent = formatLongDate(ev.date) + " · " + ev.time;
-    document.getElementById("e-where").textContent = ev.place;
-    document.getElementById("e-spots").textContent = ev.spots + " resident spots";
-    var typeEl = document.getElementById("e-type");
-    typeEl.className = "type-pill type-" + ev.type;
-    typeEl.textContent = TYPE_LABELS[ev.type] || ev.type;
-    var rsvpBtn = document.getElementById("e-rsvp");
-    rsvpBtn.textContent = hasRsvp(id) ? "Cancel RSVP" : "RSVP free";
-    rsvpBtn.classList.toggle("btn-ghost", hasRsvp(id));
-    rsvpBtn.classList.toggle("btn-primary", !hasRsvp(id));
-    eventModal.hidden = false;
-    document.body.style.overflow = "hidden";
-  }
-
-  function closeEventModal() {
-    eventModal.hidden = true;
-    if (modal.hidden) document.body.style.overflow = "";
   }
 
   function toast(msg) {
     toastEl.textContent = msg;
     toastEl.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { toastEl.hidden = true; }, 2600);
+    toastTimer = setTimeout(function () { toastEl.hidden = true; }, 2400);
   }
 
   // ---------- Events ----------
@@ -531,48 +655,76 @@
   });
 
   document.addEventListener("click", function (e) {
-    var signup = e.target.closest("[data-signup]");
+    var t = e.target;
+
+    if (t.closest("[data-sheet-close]")) {
+      closeSheet();
+      return;
+    }
+
+    var signup = t.closest("[data-signup]");
     if (signup) {
-      var gym = BUILDING_GYMS.find(function (g) {
-        return g.id === signup.getAttribute("data-signup");
-      });
-      if (gym) openSignup(gym);
+      var g = BUILDING_GYMS.find(function (x) { return x.id === signup.getAttribute("data-signup"); });
+      if (g) openSignupSheet(g);
       return;
     }
 
-    var eventBtn = e.target.closest("[data-event]");
+    var confirmSignupBtn = t.closest("[data-confirm-signup]");
+    if (confirmSignupBtn) {
+      confirmSignup(confirmSignupBtn.getAttribute("data-confirm-signup"));
+      return;
+    }
+
+    var showPass = t.closest("[data-show-pass]");
+    if (showPass) {
+      var pass = getPass(showPass.getAttribute("data-show-pass"));
+      if (pass) openPassSheet(pass);
+      return;
+    }
+
+    var eventBtn = t.closest("[data-event]");
     if (eventBtn) {
-      openEvent(eventBtn.getAttribute("data-event"));
+      var ev = findEvent(eventBtn.getAttribute("data-event"));
+      if (ev) openEventSheet(ev);
       return;
     }
 
-    var goto = e.target.closest("[data-goto]");
+    var confirmRsvp = t.closest("[data-confirm-rsvp]");
+    if (confirmRsvp) {
+      var eid = confirmRsvp.getAttribute("data-confirm-rsvp");
+      addRsvp(eid);
+      toast("RSVP confirmed — saved to My Passes");
+      var eventObj = findEvent(eid);
+      if (eventObj) openEventSheet(eventObj);
+      renderDayEvents();
+      renderTeaser();
+      renderWeekStrip();
+      if (state.view === "passes") renderPasses();
+      return;
+    }
+
+    var cancelRsvp = t.closest("[data-cancel-rsvp]");
+    if (cancelRsvp) {
+      var cid = cancelRsvp.getAttribute("data-cancel-rsvp");
+      removeRsvp(cid);
+      toast("RSVP canceled");
+      var canceled = findEvent(cid);
+      if (canceled) openEventSheet(canceled);
+      renderDayEvents();
+      renderTeaser();
+      if (state.view === "passes") renderPasses();
+      return;
+    }
+
+    var goto = t.closest("[data-goto]");
     if (goto) {
+      closeSheet();
       setView(goto.getAttribute("data-goto"));
-      return;
     }
-
-    if (e.target.closest("[data-close]")) closeModal();
-    if (e.target.closest("[data-close-event]")) closeEventModal();
-  });
-
-  document.getElementById("m-confirm").addEventListener("click", confirmSignup);
-
-  document.getElementById("e-rsvp").addEventListener("click", function () {
-    if (!activeEventId) return;
-    var going = toggleRsvp(activeEventId);
-    document.getElementById("e-rsvp").textContent = going ? "Cancel RSVP" : "RSVP free";
-    document.getElementById("e-rsvp").classList.toggle("btn-ghost", going);
-    document.getElementById("e-rsvp").classList.toggle("btn-primary", !going);
-    renderDayEvents();
-    renderTeaser();
-    toast(going ? "You're going — see you there" : "RSVP canceled");
   });
 
   document.addEventListener("keydown", function (e) {
-    if (e.key !== "Escape") return;
-    if (!eventModal.hidden) closeEventModal();
-    else if (!modal.hidden) closeModal();
+    if (e.key === "Escape" && !sheet.hidden) closeSheet();
   });
 
   document.querySelector(".tabs").addEventListener("click", function (e) {
@@ -594,16 +746,26 @@
     state.calMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     state.selectedDate = today;
     renderCalendar();
+    renderWeekStrip();
   });
 
+  // Hash only for deep links / share — never push history on tab change
   window.addEventListener("hashchange", function () {
-    setView(location.hash.replace(/^#/, "") || "discover", { fromHash: true });
+    var view = location.hash.replace(/^#/, "") || "discover";
+    if (view === "membership") view = "passes";
+    setView(view, { fromHash: true, silent: true });
   });
 
   // Boot
+  var chip = document.getElementById("building-chip");
+  if (chip) chip.textContent = BUILDING.name;
+
   buildEvents();
   var today = startOfDay(new Date());
   state.calMonth = new Date(today.getFullYear(), today.getMonth(), 1);
   state.selectedDate = today;
-  setView(location.hash.replace(/^#/, "") || "discover", { fromHash: true, silent: true });
+
+  var initial = location.hash.replace(/^#/, "") || "discover";
+  if (initial === "membership") initial = "passes";
+  setView(initial, { fromHash: true, silent: true });
 })();
