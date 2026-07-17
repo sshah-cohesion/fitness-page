@@ -115,29 +115,77 @@
     return '<span class="pill ' + cls + '">' + escapeHtml(b.label) + "</span>";
   }
 
-  function passCode(gymId) {
-    var raw = "COH|" + BUILDING.short + "|" + gymId + "|" + Date.now().toString(36).toUpperCase();
-    return raw;
+  function randomToken(bytes) {
+    var n = bytes || 8;
+    var arr = new Uint8Array(n);
+    if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(arr);
+    else for (var i = 0; i < n; i++) arr[i] = Math.floor(Math.random() * 256);
+    return Array.prototype.map.call(arr, function (b) {
+      return ("0" + b.toString(16)).slice(-2);
+    }).join("").toUpperCase();
   }
 
-  function memberIdFromCode(code) {
+  // Fresh QR payload every time — timestamp + random so codes never repeat
+  function passCode(gymId) {
+    return [
+      "COH",
+      BUILDING.short.replace(/\s+/g, ""),
+      gymId,
+      Date.now().toString(36).toUpperCase(),
+      randomToken(8),
+    ].join("|");
+  }
+
+  function makeMemberId(gymId) {
+    var seed = gymId + "|" + randomToken(4);
     var hash = 0;
-    for (var i = 0; i < code.length; i++) hash = ((hash << 5) - hash) + code.charCodeAt(i);
+    for (var i = 0; i < seed.length; i++) hash = ((hash << 5) - hash) + seed.charCodeAt(i);
     var n = Math.abs(hash % 1000000);
     return "PA-" + pad(Math.floor(n / 1000)) + "-" + pad(n % 1000);
   }
 
   // ---------- Storage ----------
+  function migrateLegacyStorage() {
+    try {
+      if (!localStorage.getItem(STORE_KEY) && localStorage.getItem("fitness_building_gyms")) {
+        localStorage.setItem(STORE_KEY, localStorage.getItem("fitness_building_gyms"));
+      }
+      if (!localStorage.getItem(RSVP_KEY) && localStorage.getItem("fitness_event_rsvps")) {
+        localStorage.setItem(RSVP_KEY, localStorage.getItem("fitness_event_rsvps"));
+      }
+    } catch (e) {}
+  }
+  migrateLegacyStorage();
+
   function getPasses() {
     try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }
     catch (e) { return []; }
+  }
+  function writePasses(all) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(all)); } catch (e) {}
   }
   function savePass(entry) {
     var all = getPasses();
     if (all.some(function (x) { return x.id === entry.id; })) return false;
     all.unshift(entry);
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(all)); } catch (e) {}
+    writePasses(all);
     return true;
+  }
+  function updatePass(id, patch) {
+    var all = getPasses();
+    var idx = -1;
+    for (var i = 0; i < all.length; i++) if (all[i].id === id) { idx = i; break; }
+    if (idx < 0) return null;
+    for (var k in patch) if (Object.prototype.hasOwnProperty.call(patch, k)) all[idx][k] = patch[k];
+    writePasses(all);
+    return all[idx];
+  }
+  // Rotate QR each time the pass is shown (member ID stays stable)
+  function rotatePassQr(passId) {
+    return updatePass(passId, {
+      code: passCode(passId),
+      codeUpdatedAt: new Date().toISOString(),
+    });
   }
   function isSignedUp(id) {
     return getPasses().some(function (x) { return x.id === id; });
@@ -267,15 +315,15 @@
   function confirmSignup(gymId) {
     var gym = BUILDING_GYMS.find(function (g) { return g.id === gymId; });
     if (!gym || isSignedUp(gymId)) return;
-    var code = passCode(gymId);
     var entry = {
       id: gym.id,
       name: gym.name,
       location: gym.location,
       img: gym.img,
       fallback: gym.fallback,
-      code: code,
-      memberId: memberIdFromCode(code),
+      code: passCode(gym.id),
+      memberId: makeMemberId(gym.id),
+      codeUpdatedAt: new Date().toISOString(),
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
     };
     savePass(entry);
@@ -290,29 +338,39 @@
   }
 
   function openPassSheet(pass, opts) {
+    // New QR every open (prevents screenshot reuse); member ID stays the same
+    var fresh = rotatePassQr(pass.id) || pass;
+    if (!fresh.code || fresh === pass) {
+      fresh = Object.assign({}, pass, {
+        code: passCode(pass.id),
+        codeUpdatedAt: new Date().toISOString(),
+      });
+      if (getPass(pass.id)) updatePass(pass.id, { code: fresh.code, codeUpdatedAt: fresh.codeUpdatedAt });
+    }
     openSheet(
       '<div class="pass-sheet">' +
         (opts && opts.justJoined ? '<p class="pass-banner">You\'re signed up</p>' : "") +
-        '<h2 id="sheet-title">' + escapeHtml(pass.name) + "</h2>" +
+        '<h2 id="sheet-title">' + escapeHtml(fresh.name) + "</h2>" +
         '<p class="pass-sub">Show this QR at the door for access</p>' +
         '<div class="qr-wrap" id="qr-wrap"><canvas></canvas></div>' +
+        '<p class="qr-rotate-note">One-time code · refreshes each time you open this pass</p>' +
         '<div class="pass-meta">' +
-          "<div><span>Member ID</span><strong>" + escapeHtml(pass.memberId) + "</strong></div>" +
-          "<div><span>Location</span><strong>" + escapeHtml(pass.location) + "</strong></div>" +
+          "<div><span>Member ID</span><strong>" + escapeHtml(fresh.memberId) + "</strong></div>" +
+          "<div><span>Location</span><strong>" + escapeHtml(fresh.location) + "</strong></div>" +
           "<div><span>Building</span><strong>" + escapeHtml(BUILDING.name) + "</strong></div>" +
           "<div><span>Status</span><strong class=\"ok\">Active</strong></div>" +
         "</div>" +
         '<button class="btn btn-primary btn-block" type="button" data-goto="passes">View in My Passes</button>' +
-        '<button class="btn btn-wallet btn-block" type="button" data-wallet-gym="' + escapeHtml(pass.id) + '">' +
+        '<button class="btn btn-wallet btn-block" type="button" data-wallet-gym="' + escapeHtml(fresh.id) + '">' +
           walletIconSvg() + " Add to Apple Wallet</button>" +
-        '<button class="btn btn-ghost btn-block" type="button" data-save-pass-card="' + escapeHtml(pass.id) + '">Save pass card</button>' +
+        '<button class="btn btn-ghost btn-block" type="button" data-save-pass-card="' + escapeHtml(fresh.id) + '">Save pass card</button>' +
         '<button class="btn btn-ghost btn-block" type="button" data-sheet-close>Done</button>' +
-        '<p class="fineprint">Your pass is saved in My Passes. Apple Wallet needs Pass certificates on Vercel.</p>' +
+        '<p class="fineprint">In-app QR rotates every open. Apple Wallet stores a snapshot from when you add it.</p>' +
       "</div>",
       {
         kind: "pass",
         afterRender: function (root) {
-          renderQrCanvas(root.querySelector("#qr-wrap"), pass.code);
+          renderQrCanvas(root.querySelector("#qr-wrap"), fresh.code);
         },
       }
     );
@@ -497,18 +555,21 @@
   }
 
   function addGymToWallet(pass) {
+    var fresh = rotatePassQr(pass.id) || pass;
     var btn = document.querySelector("[data-wallet-gym='" + pass.id + "']");
     if (btn) { btn.disabled = true; btn.textContent = "Adding…"; }
+    // Refresh on-screen QR to match what goes into Wallet
+    renderQrCanvas(document.querySelector("#qr-wrap"), fresh.code);
     fetch("/api/wallet-pass", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         kind: "gym",
-        serialNumber: pass.memberId || pass.id,
-        code: pass.code,
-        memberId: pass.memberId,
-        name: pass.name,
-        location: pass.location,
+        serialNumber: fresh.memberId || fresh.id,
+        code: fresh.code,
+        memberId: fresh.memberId,
+        name: fresh.name,
+        location: fresh.location,
         building: BUILDING.name,
         description: "Tenant fitness access pass",
       }),
@@ -539,13 +600,14 @@
     var range = parseEventTimeRange(ev);
     var btn = document.querySelector("[data-wallet-event='" + ev.id + "']");
     if (btn) { btn.disabled = true; btn.textContent = "Adding…"; }
+    var eventCode = "EVT|" + ev.id + "|" + Date.now().toString(36).toUpperCase() + "|" + randomToken(6);
     fetch("/api/wallet-pass", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         kind: "event",
-        serialNumber: ev.id,
-        code: "EVT|" + ev.id,
+        serialNumber: ev.id + "-" + Date.now().toString(36),
+        code: eventCode,
         title: ev.title,
         when: formatLongDate(ev.date) + " · " + ev.time,
         place: ev.place,
@@ -942,8 +1004,13 @@
 
     var saveCard = t.closest("[data-save-pass-card]");
     if (saveCard) {
-      var sp = getPass(saveCard.getAttribute("data-save-pass-card"));
-      if (sp) savePassCardImage(sp);
+      var sp = rotatePassQr(saveCard.getAttribute("data-save-pass-card")) ||
+        getPass(saveCard.getAttribute("data-save-pass-card"));
+      if (sp) {
+        renderQrCanvas(document.querySelector("#qr-wrap"), sp.code);
+        // draw after QR paints
+        setTimeout(function () { savePassCardImage(sp); }, 80);
+      }
       return;
     }
 

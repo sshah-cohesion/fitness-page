@@ -820,6 +820,12 @@ body.view-passes .not-passes { display: none; }
 }
 .pass-sheet h2 { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
 .pass-sub { margin: 0 0 14px; color: var(--muted); font-size: 13.5px; }
+.qr-rotate-note {
+  margin: 0 0 14px;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 600;
+}
 .qr-wrap {
   width: 216px;
   height: 216px;
