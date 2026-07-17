@@ -14,7 +14,6 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body class="view-discover">
-  <!-- Top bar -->
   <header class="topbar">
     <div class="wrap topbar-inner">
       <div class="breadcrumb">
@@ -26,56 +25,66 @@
       <div class="topbar-head">
         <div class="topbar-title">
           <h1>Fitness &amp; Wellness</h1>
-          <p>Nearby gyms, studios, and wellness partners with member-only pricing.</p>
+          <p>Free in-building gyms, nearby studios, and community fitness events.</p>
         </div>
         <nav class="tabs" aria-label="Sections">
           <button class="tab is-active" data-tab="discover">Discover</button>
+          <button class="tab" data-tab="events">Events</button>
           <button class="tab" data-tab="studios">Studios</button>
-          <button class="tab" data-tab="membership">My Membership</button>
+          <button class="tab" data-tab="membership">My Gyms</button>
         </nav>
       </div>
     </div>
   </header>
 
   <main class="wrap content">
-    <!-- Featured (Discover view only) -->
-    <section class="featured only-discover">
-      <span class="section-label">FEATURED</span>
-      <article class="featured-card">
-        <div class="featured-media">
-          <img data-fallback="strength" src="https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1000&q=70" alt="Featured gym floor" />
-          <span class="pill pill-brand featured-badge">Grand opening offer</span>
+    <!-- In-building free gyms (Discover) -->
+    <section class="building-gyms only-discover">
+      <div class="section-head">
+        <div>
+          <span class="section-label">IN YOUR BUILDING</span>
+          <h2 class="section-title">Complimentary resident gyms</h2>
+          <p class="section-sub">Sign up free — access with your resident key fob.</p>
         </div>
-        <div class="featured-body">
-          <div class="featured-toprow">
-            <h2 id="featured-name">Vantage Athletic Club</h2>
-            <span class="rating" id="featured-rating"></span>
-          </div>
-          <a class="addr" id="featured-addr" href="#" target="_blank" rel="noopener">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 21s-7-6.3-7-11a7 7 0 1 1 14 0c0 4.7-7 11-7 11Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="10" r="2.4" stroke="currentColor" stroke-width="2"/></svg>
-            <span class="addr-txt">360 West Hubbard Street, Chicago · 0.2 mi from Main Lobby</span>
-          </a>
-          <span class="member-perk">MEMBER PERK</span>
-          <h3>Waived $250 enrollment + first month free</h3>
-          <p>Full-service athletic club with a lap pool, strength floor, group fitness, and recovery spa — exclusive pricing for building members.</p>
-          <button class="btn btn-primary" data-buy="featured">View membership</button>
-        </div>
-      </article>
+      </div>
+      <div class="building-grid" id="building-grid"></div>
     </section>
 
-    <!-- Studios heading (Studios view only) -->
+    <!-- Upcoming events teaser (Discover) -->
+    <section class="events-teaser only-discover">
+      <div class="section-head row">
+        <div>
+          <span class="section-label">THIS WEEK</span>
+          <h2 class="section-title">Upcoming fitness events</h2>
+        </div>
+        <button class="btn btn-ghost" data-goto="events">Open calendar</button>
+      </div>
+      <div class="teaser-list" id="teaser-list"></div>
+    </section>
+
+    <!-- Studios heading (Studios view) -->
     <div class="view-heading only-studios">
-      <span class="section-label">ALL STUDIOS</span>
-      <h2>Nearby fitness &amp; wellness partners</h2>
+      <span class="section-label">NEARBY STUDIOS</span>
+      <h2>Partner studios near the building</h2>
+      <p class="section-sub">Explore local fitness partners — visit their sites to book classes.</p>
+    </div>
+
+    <!-- Discover studios heading -->
+    <div class="section-head only-discover discover-studios-head">
+      <div>
+        <span class="section-label">NEARBY</span>
+        <h2 class="section-title">Studios around the building</h2>
+      </div>
+      <button class="btn btn-ghost" data-goto="studios">See all</button>
     </div>
 
     <!-- Filters (Discover + Studios) -->
-    <section class="filters not-membership">
+    <section class="filters not-membership not-events">
       <div class="chips" id="chips">
         <button class="chip chip-all is-active" data-filter="all">All
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <button class="chip" data-filter="new"><span class="dot dot-green"></span>New offer</button>
+        <button class="chip" data-filter="new"><span class="dot dot-green"></span>New near you</button>
         <button class="chip" data-filter="popular"><span class="dot dot-red"></span>Popular</button>
         <button class="chip" data-filter="limited"><span class="dot dot-amber"></span>Limited spots</button>
         <button class="chip" data-filter="strength">Strength</button>
@@ -89,33 +98,70 @@
       </label>
     </section>
 
-    <!-- Catalog grid (Discover + Studios) -->
-    <section class="grid not-membership" id="grid" aria-live="polite"></section>
-    <p class="empty not-membership" id="empty" hidden>No studios match your filters.</p>
+    <section class="grid not-membership not-events" id="grid" aria-live="polite"></section>
+    <p class="empty not-membership not-events" id="empty" hidden>No studios match your filters.</p>
 
-    <!-- My Membership view -->
+    <!-- Events / Calendar view -->
+    <section class="events-view only-events" id="eventsView">
+      <div class="view-heading">
+        <span class="section-label">FITNESS CALENDAR</span>
+        <h2>Building fitness events</h2>
+        <p class="section-sub">Classes and community workouts hosted in your building — free for residents.</p>
+      </div>
+
+      <div class="calendar-shell">
+        <div class="calendar-panel">
+          <div class="cal-toolbar">
+            <button class="icon-btn" id="cal-prev" aria-label="Previous month">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <h3 id="cal-month-label">Month</h3>
+            <button class="icon-btn" id="cal-next" aria-label="Next month">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <button class="btn btn-ghost cal-today" id="cal-today">Today</button>
+          </div>
+          <div class="cal-weekdays" aria-hidden="true">
+            <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+          </div>
+          <div class="cal-grid" id="cal-grid" role="grid" aria-labelledby="cal-month-label"></div>
+        </div>
+
+        <aside class="event-panel">
+          <div class="event-panel-head">
+            <span class="section-label">SCHEDULE</span>
+            <h3 id="event-day-label">Today</h3>
+          </div>
+          <div class="event-day-list" id="event-day-list"></div>
+          <p class="event-empty" id="event-empty" hidden>No fitness events on this day. Pick another date on the calendar.</p>
+        </aside>
+      </div>
+    </section>
+
+    <!-- My Gyms view -->
     <section class="membership-view only-membership" id="membershipView">
       <div class="view-heading">
-        <span class="section-label">MY MEMBERSHIP</span>
-        <h2>Your active passes</h2>
+        <span class="section-label">MY GYMS</span>
+        <h2>Your free building access</h2>
+        <p class="section-sub">Gyms you’ve signed up for — show your resident pass at the door.</p>
       </div>
       <div id="mm-list" class="mm-list"></div>
       <div id="mm-empty" class="mm-empty">
         <div class="mm-empty-icon">
           <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M6.5 9a5.5 5.5 0 0 1 11 0v1.2c0 .9.3 1.7.9 2.4l.6.7c.9 1.1.1 2.7-1.3 2.7H6.3c-1.4 0-2.2-1.6-1.3-2.7l.6-.7c.6-.7.9-1.5.9-2.4V9Z" stroke="currentColor" stroke-width="1.8"/><path d="M10 19a2 2 0 0 0 4 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         </div>
-        <h3>No memberships yet</h3>
-        <p>Buy a membership from Discover and it'll show up here as a digital pass.</p>
-        <button class="btn btn-primary" data-goto="discover">Browse studios</button>
+        <h3>No gyms yet</h3>
+        <p>Sign up free for an in-building gym and your access pass will show up here.</p>
+        <button class="btn btn-primary" data-goto="discover">Browse building gyms</button>
       </div>
     </section>
   </main>
 
   <footer class="wrap foot">
-    <span>Powered by your building community · Prices shown are member rates.</span>
+    <span>Powered by your building community · In-building gyms are free for residents.</span>
   </footer>
 
-  <!-- Membership modal -->
+  <!-- Free signup modal -->
   <div class="modal" id="modal" hidden>
     <div class="modal-backdrop" data-close></div>
     <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="m-title">
@@ -125,19 +171,24 @@
       <div class="modal-hero">
         <img id="m-img" data-fallback="strength" src="" alt="" />
         <div class="modal-hero-overlay">
-          <h2 id="m-title">Membership</h2>
+          <span class="pill pill-free">Free for residents</span>
+          <h2 id="m-title">Gym</h2>
           <p id="m-sub"></p>
         </div>
       </div>
       <div class="modal-body" id="m-body">
-        <div class="tiers" id="m-tiers"></div>
-        <div class="checkout" id="m-checkout" hidden>
-          <div class="checkout-summary">
-            <span>You selected</span>
-            <strong id="m-selected"></strong>
+        <div id="m-signup">
+          <p class="modal-tagline" id="m-tagline"></p>
+          <ul class="perk-list" id="m-perks"></ul>
+          <div class="signup-summary">
+            <div>
+              <strong>Resident access</strong>
+              <span>Complimentary · no membership fee</span>
+            </div>
+            <span class="free-badge">Free</span>
           </div>
-          <button class="btn btn-primary btn-block" id="m-confirm">Confirm &amp; buy</button>
-          <p class="fineprint">Billed to your building account. Cancel anytime from My Membership.</p>
+          <button class="btn btn-primary btn-block" id="m-confirm">Sign up free</button>
+          <p class="fineprint">Linked to your resident profile. Cancel anytime from My Gyms.</p>
         </div>
         <div class="success" id="m-success" hidden>
           <div class="success-check">
@@ -145,8 +196,30 @@
           </div>
           <h3>You're in!</h3>
           <p id="m-success-text"></p>
-          <button class="btn btn-primary btn-block" data-goto="membership" data-close>View my membership</button>
+          <button class="btn btn-primary btn-block" data-goto="membership" data-close>View my gyms</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event detail modal -->
+  <div class="modal" id="event-modal" hidden>
+    <div class="modal-backdrop" data-close-event></div>
+    <div class="modal-card modal-card-sm" role="dialog" aria-modal="true" aria-labelledby="e-title">
+      <button class="modal-close" data-close-event aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <div class="event-modal-body">
+        <span class="type-pill" id="e-type"></span>
+        <h2 id="e-title">Event</h2>
+        <p id="e-desc" class="event-modal-desc"></p>
+        <dl class="event-meta">
+          <div><dt>When</dt><dd id="e-when"></dd></div>
+          <div><dt>Where</dt><dd id="e-where"></dd></div>
+          <div><dt>Spots</dt><dd id="e-spots"></dd></div>
+        </dl>
+        <button class="btn btn-primary btn-block" id="e-rsvp">RSVP free</button>
+        <p class="fineprint">Free for building residents. You’ll get a reminder the morning of.</p>
       </div>
     </div>
   </div>
