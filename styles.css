@@ -1,7 +1,10 @@
 :root {
   --brand: #4c5bd4;
   --brand-2: #5b6be0;
+  --brand-deep: #3d4db8;
   --brand-soft: #eef0fb;
+  --lavender: #ebe8f8;
+  --lavender-2: #e3dff5;
   --ink: #1c2230;
   --ink-2: #4a5163;
   --muted: #8b91a3;
@@ -617,7 +620,7 @@ body.view-passes .not-passes { display: none; }
   align-items: center;
   justify-content: center;
 }
-.mm-list, .rsvp-list { display: flex; flex-direction: column; gap: 10px; }
+.mm-list, .rsvp-list { display: flex; flex-direction: column; gap: 12px; }
 .mm-empty.compact {
   text-align: left;
   padding: 14px;
@@ -626,6 +629,101 @@ body.view-passes .not-passes { display: none; }
   border-radius: 14px;
 }
 .mm-empty.compact p { margin: 0 0 10px; color: var(--muted); font-size: 13.5px; }
+
+/* Membership mini cards (My Passes) */
+.membership-mini {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--card);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  transition: box-shadow .15s, transform .15s;
+}
+.membership-mini:active { transform: scale(.99); }
+.membership-mini:hover { box-shadow: var(--shadow-md); }
+.membership-mini-hero {
+  position: relative;
+  padding: 16px 16px 18px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 88% 18%, rgba(255,255,255,.22), transparent 42%),
+    linear-gradient(135deg, var(--brand-deep) 0%, var(--brand) 48%, #7b8cff 100%);
+  overflow: hidden;
+}
+.membership-mini-hero::after {
+  content: "";
+  position: absolute;
+  right: -20px;
+  bottom: -28px;
+  width: 120px;
+  height: 120px;
+  border-radius: 24px;
+  background: rgba(255,255,255,.08);
+  transform: rotate(18deg);
+}
+.membership-mini-hero .membership-kicker {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  color: rgba(255,255,255,.78);
+}
+.membership-mini-hero strong {
+  position: relative;
+  z-index: 1;
+  display: block;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -.015em;
+  line-height: 1.25;
+}
+.membership-mini-tier {
+  position: relative;
+  z-index: 1;
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,.9);
+}
+.membership-mini-body { padding: 12px 14px 14px; background: #fff; }
+.membership-mini-meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px;
+  background: var(--lavender);
+  border-radius: 12px;
+}
+.membership-mini-meta span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.membership-mini-meta strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+.membership-mini-cta {
+  margin: 10px 2px 0;
+  color: var(--brand);
+  font-size: 12.5px;
+  font-weight: 700;
+}
 .empty { text-align: center; color: var(--muted); padding: 36px 0; }
 .foot {
   text-align: center;
@@ -836,7 +934,7 @@ body.view-passes .not-passes { display: none; }
   position: absolute;
   top: 12px;
   right: 12px;
-  z-index: 2;
+  z-index: 3;
   border: 0;
   background: rgba(255,255,255,.94);
   color: var(--ink);
@@ -847,50 +945,203 @@ body.view-passes .not-passes { display: none; }
   place-items: center;
   box-shadow: var(--shadow-card);
 }
-.pass-sheet { padding: 28px 20px 22px; text-align: center; }
-.pass-banner {
-  display: inline-flex;
-  margin: 0 0 10px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--green);
-  background: var(--green-bg);
-  padding: 5px 10px;
-  border-radius: 999px;
+.sheet-card.is-membership .sheet-handle { display: none; }
+.sheet-card.is-membership .sheet-close {
+  background: rgba(255,255,255,.18);
+  color: #fff;
+  box-shadow: none;
+  backdrop-filter: blur(6px);
 }
-.pass-sheet h2 { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
-.pass-sub { margin: 0 0 14px; color: var(--muted); font-size: 13.5px; }
-.qr-rotate-note {
+
+/* Membership program pass (matches Cohesion membership card) */
+.pass-sheet.membership-pass {
+  padding: 0;
+  text-align: center;
+}
+.membership-hero {
+  position: relative;
+  padding: 28px 22px 26px;
+  text-align: left;
+  color: #fff;
+  overflow: hidden;
+  min-height: 148px;
+}
+.membership-hero-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 92% 12%, rgba(255,255,255,.28), transparent 40%),
+    radial-gradient(circle at 8% 88%, rgba(255,255,255,.12), transparent 36%),
+    linear-gradient(145deg, var(--brand-deep) 0%, var(--brand) 45%, #7b8cff 100%);
+}
+.membership-hero-bg::before,
+.membership-hero-bg::after {
+  content: "";
+  position: absolute;
+  border-radius: 20px;
+  background: rgba(255,255,255,.08);
+  transform: rotate(16deg);
+}
+.membership-hero-bg::before {
+  width: 140px;
+  height: 140px;
+  right: -30px;
+  bottom: -40px;
+}
+.membership-hero-bg::after {
+  width: 90px;
+  height: 90px;
+  right: 70px;
+  top: -30px;
+}
+.membership-kicker {
+  position: relative;
+  z-index: 1;
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  color: rgba(255,255,255,.78);
+}
+.membership-hero h2 {
+  position: relative;
+  z-index: 1;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.2;
+  margin: 0 0 8px;
+  max-width: 86%;
+}
+.membership-tier {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,.92);
+}
+.membership-body {
+  padding: 22px 20px 24px;
+  background: #fff;
+}
+.pass-sub {
   margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 13.5px;
+}
+.qr-rotate-note {
+  margin: 0 0 16px;
   color: var(--brand);
   font-size: 12px;
   font-weight: 600;
 }
 .qr-wrap {
-  width: 216px;
-  height: 216px;
-  margin: 0 auto 16px;
-  padding: 8px;
+  width: 228px;
+  height: 228px;
+  margin: 0 auto 12px;
+  padding: 12px;
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 20px;
   display: grid;
   place-items: center;
-  box-shadow: var(--shadow-card);
+  box-shadow: 0 10px 28px rgba(76, 91, 212, .12);
 }
 .qr-wrap canvas, .qr-fallback { width: 200px !important; height: 200px !important; }
-.pass-meta {
+
+.membership-panel {
+  text-align: left;
+  background: var(--lavender);
+  border-radius: 16px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+.membership-panel-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.membership-panel-label {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.membership-panel-value {
+  display: block;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  color: var(--ink);
+}
+.active-tier-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  color: var(--green);
+  background: var(--green-bg);
+  padding: 5px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.membership-panel-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
-  text-align: left;
-  margin-bottom: 14px;
 }
-.pass-meta div { background: var(--bg); border-radius: 10px; padding: 10px; }
-.pass-meta span { display: block; color: var(--muted); font-size: 11px; font-weight: 600; margin-bottom: 2px; }
-.pass-meta strong { font-size: 12.5px; font-weight: 700; }
-.pass-meta strong.ok { color: var(--green); }
-.pass-sheet .btn + .btn { margin-top: 8px; }
+.membership-panel-grid div {
+  background: rgba(255,255,255,.72);
+  border-radius: 12px;
+  padding: 10px;
+}
+.membership-panel-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+.membership-panel-grid strong {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.3;
+}
+.btn-membership {
+  background: #fff;
+  color: var(--brand);
+  border: 1.5px solid #c9d0f5;
+  box-shadow: none;
+}
+.btn-membership:hover { background: var(--brand-soft); }
+.membership-body .btn + .btn { margin-top: 8px; }
+
+/* Featured offer polish */
+.featured-card {
+  border-radius: 20px;
+}
+.featured-media .pill {
+  box-shadow: 0 2px 8px rgba(20, 25, 40, .12);
+}
+.member-offer-label {
+  color: var(--brand);
+}
+.featured-body h3 {
+  font-size: 17px;
+  letter-spacing: -.01em;
+}
+.detail-membership-panel {
+  margin: 0 0 14px;
+}
 
 .toast {
   position: fixed;
@@ -932,4 +1183,10 @@ body.view-passes .not-passes { display: none; }
   }
   .sheet-card, .calendar-panel, .event-panel, .detail-content { background: #171a2b; }
   .detail-page { background: #0f1220; }
+  .membership-body { background: #171a2b; }
+  .membership-panel { background: #24284a; }
+  .membership-panel-grid div { background: rgba(23, 26, 43, .75); }
+  .membership-mini-body { background: #171a2b; }
+  .membership-mini-meta { background: #24284a; }
+  .btn-membership { background: #21254a; border-color: #353a62; }
 }

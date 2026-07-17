@@ -239,6 +239,10 @@
   // ---------- Sheet (QR only, no history) ----------
   function openSheet(html, opts) {
     sheetBody.innerHTML = html;
+    var card = sheet.querySelector(".sheet-card");
+    if (card) {
+      card.classList.toggle("is-membership", !!(opts && opts.membership));
+    }
     sheet.hidden = false;
     document.body.classList.add("sheet-open");
     if (opts && opts.afterRender) opts.afterRender(sheetBody);
@@ -247,6 +251,8 @@
     sheet.hidden = true;
     sheetBody.innerHTML = "";
     document.body.classList.remove("sheet-open");
+    var card = sheet.querySelector(".sheet-card");
+    if (card) card.classList.remove("is-membership");
   }
 
   function renderQrCanvas(container, payload) {
@@ -301,23 +307,42 @@
       if (getPass(pass.id)) updatePass(pass.id, { code: fresh.code, codeUpdatedAt: fresh.codeUpdatedAt });
     }
     openSheet(
-      '<div class="pass-sheet">' +
-        (opts && opts.justJoined ? '<p class="pass-banner">You\'re signed up</p>' : "") +
-        '<h2 id="sheet-title">' + escapeHtml(fresh.name) + "</h2>" +
-        '<p class="pass-sub">Show this QR at the door for access</p>' +
-        '<div class="qr-wrap" id="qr-wrap"><canvas></canvas></div>' +
-        '<p class="qr-rotate-note">One-time code · refreshes each time you open this pass</p>' +
-        '<div class="pass-meta">' +
-          "<div><span>Member ID</span><strong>" + escapeHtml(fresh.memberId) + "</strong></div>" +
-          "<div><span>Location</span><strong>" + escapeHtml(fresh.location) + "</strong></div>" +
-          "<div><span>Building</span><strong>" + escapeHtml(BUILDING.name) + "</strong></div>" +
-          "<div><span>Status</span><strong class=\"ok\">Active</strong></div>" +
+      '<div class="pass-sheet membership-pass">' +
+        '<div class="membership-hero">' +
+          '<div class="membership-hero-bg" aria-hidden="true"></div>' +
+          '<p class="membership-kicker">MEMBERSHIP PROGRAM</p>' +
+          '<h2 id="sheet-title">' + escapeHtml(fresh.name) + "</h2>" +
+          '<p class="membership-tier">' +
+            (opts && opts.justJoined ? "Welcome · " : "") +
+            "Tenant Access Member" +
+          "</p>" +
         "</div>" +
-        '<button class="btn btn-primary btn-block" type="button" data-goto="passes">View in My Passes</button>' +
-        '<button class="btn btn-ghost btn-block" type="button" data-save-pass-card="' + escapeHtml(fresh.id) + '">Save pass card</button>' +
-        '<button class="btn btn-ghost btn-block" type="button" data-sheet-close>Done</button>' +
+        '<div class="membership-body">' +
+          '<p class="pass-sub">Show this QR at the door for access</p>' +
+          '<div class="qr-wrap" id="qr-wrap"><canvas></canvas></div>' +
+          '<p class="qr-rotate-note">One-time code · refreshes each time you open this pass</p>' +
+          '<div class="membership-panel">' +
+            '<div class="membership-panel-top">' +
+              "<div>" +
+                '<span class="membership-panel-label">Your access</span>' +
+                '<strong class="membership-panel-value">' + escapeHtml(fresh.memberId) + "</strong>" +
+              "</div>" +
+              '<span class="active-tier-badge">ACTIVE PASS</span>' +
+            "</div>" +
+            '<div class="membership-panel-grid">' +
+              "<div><span>Location</span><strong>" + escapeHtml(fresh.location) + "</strong></div>" +
+              "<div><span>Building</span><strong>" + escapeHtml(BUILDING.name) + "</strong></div>" +
+            "</div>" +
+          "</div>" +
+          '<button class="btn btn-primary btn-block" type="button" data-goto="passes">View in My Passes</button>' +
+          '<button class="btn btn-membership btn-block" type="button" data-save-pass-card="' +
+            escapeHtml(fresh.id) +
+            '">Save pass card</button>' +
+          '<button class="btn btn-ghost btn-block" type="button" data-sheet-close>Done</button>' +
+        "</div>" +
       "</div>",
       {
+        membership: true,
         afterRender: function (root) {
           renderQrCanvas(root.querySelector("#qr-wrap"), fresh.code);
         },
@@ -372,9 +397,18 @@
         '<a class="addr" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener">' + escapeHtml(shortAddr(gym.address) || gym.location) + "</a>" +
         '<p class="detail-dist">' + escapeHtml(gym.distance) + " · " + escapeHtml(gym.hours) + "</p>" +
         '<div class="detail-divider"></div>' +
-        '<span class="member-offer-label">TENANT AMENITY</span>' +
-        "<h3>Complimentary access with QR pass</h3>" +
+        '<span class="member-offer-label">MEMBERSHIP PROGRAM</span>' +
+        "<h3>Member perks · free tenant signup</h3>" +
         '<p class="detail-desc">' + escapeHtml(gym.tagline) + "</p>" +
+        (signed
+          ? '<div class="membership-panel detail-membership-panel">' +
+              '<div class="membership-panel-top">' +
+                "<div><span class=\"membership-panel-label\">Your access</span>" +
+                '<strong class="membership-panel-value">Tenant Access</strong></div>' +
+                '<span class="active-tier-badge">ACTIVE PASS</span>' +
+              "</div>" +
+            "</div>"
+          : "") +
         '<ul class="perk-list">' +
           (gym.perks || []).map(function (p) {
             return "<li><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M5 12.5 10 17.5 19 7\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>" +
@@ -383,8 +417,8 @@
         "</ul>" +
         '<div class="detail-actions">' +
           (signed
-            ? '<button class="btn btn-primary btn-block" type="button" data-show-pass="' + gym.id + '">Show QR pass</button>'
-            : '<button class="btn btn-primary btn-block" type="button" data-confirm-signup="' + gym.id + '">Sign up free</button>') +
+            ? '<button class="btn btn-primary btn-block" type="button" data-show-pass="' + gym.id + '">Show membership QR</button>'
+            : '<button class="btn btn-primary btn-block" type="button" data-confirm-signup="' + gym.id + '">Join free · get QR pass</button>') +
           '<a class="btn btn-ghost btn-block" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener">Get directions</a>' +
         "</div>" +
       "</div>";
@@ -500,36 +534,71 @@
   function savePassCardImage(pass) {
     var canvas = document.createElement("canvas");
     canvas.width = 720;
-    canvas.height = 980;
+    canvas.height = 1100;
     var ctx = canvas.getContext("2d");
-    var grad = ctx.createLinearGradient(0, 0, 720, 980);
-    grad.addColorStop(0, "#4c5bd4");
-    grad.addColorStop(1, "#7a5cff");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 720, 980);
-    ctx.fillStyle = "rgba(255,255,255,0.16)";
-    roundRect(ctx, 40, 40, 640, 900, 36);
+    ctx.fillStyle = "#ffffff";
+    roundRect(ctx, 0, 0, 720, 1100, 40);
     ctx.fill();
+
+    var grad = ctx.createLinearGradient(0, 0, 720, 320);
+    grad.addColorStop(0, "#3d4db8");
+    grad.addColorStop(0.55, "#5b6be0");
+    grad.addColorStop(1, "#7b8cff");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 720, 320);
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.beginPath();
+    ctx.arc(560, 40, 180, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(80, 260, 120, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255,255,255,0.78)";
+    ctx.font = "700 18px Inter, sans-serif";
+    ctx.letterSpacing = "2px";
+    ctx.fillText("MEMBERSHIP PROGRAM", 48, 70);
     ctx.fillStyle = "#fff";
-    ctx.font = "700 22px Inter, sans-serif";
-    ctx.fillText("125 PARK AVENUE", 80, 120);
-    ctx.font = "800 40px Inter, sans-serif";
-    wrapText(ctx, pass.name, 80, 180, 560, 48);
-    ctx.font = "500 22px Inter, sans-serif";
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.fillText(pass.location, 80, 280);
-    ctx.fillText("Member ID  " + pass.memberId, 80, 320);
+    ctx.font = "800 36px Inter, sans-serif";
+    wrapText(ctx, pass.name, 48, 130, 620, 42);
+    ctx.font = "600 20px Inter, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.fillText("Tenant Access Member", 48, 250);
+
+    ctx.fillStyle = "#4a5163";
+    ctx.font = "500 18px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Show this QR at the door for access", 360, 380);
+
     var qrCanvas = document.querySelector("#qr-wrap canvas");
     if (qrCanvas && qrCanvas.width) {
       ctx.fillStyle = "#fff";
-      roundRect(ctx, 180, 380, 360, 360, 24);
+      ctx.strokeStyle = "#e8eaf0";
+      ctx.lineWidth = 2;
+      roundRect(ctx, 170, 410, 380, 380, 28);
       ctx.fill();
-      ctx.drawImage(qrCanvas, 200, 400, 320, 320);
+      ctx.stroke();
+      ctx.drawImage(qrCanvas, 195, 435, 330, 330);
     }
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.font = "600 20px Inter, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("Show this QR at the door · Active pass", 360, 820);
+
+    ctx.fillStyle = "#eef0fb";
+    roundRect(ctx, 48, 830, 624, 200, 24);
+    ctx.fill();
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#8b91a3";
+    ctx.font = "700 14px Inter, sans-serif";
+    ctx.fillText("YOUR ACCESS", 72, 870);
+    ctx.fillStyle = "#1c2230";
+    ctx.font = "800 28px Inter, sans-serif";
+    ctx.fillText(pass.memberId || "", 72, 910);
+    ctx.fillStyle = "#17915a";
+    ctx.font = "800 14px Inter, sans-serif";
+    ctx.fillText("ACTIVE PASS", 480, 870);
+    ctx.fillStyle = "#4a5163";
+    ctx.font = "500 16px Inter, sans-serif";
+    ctx.fillText(pass.location || "", 72, 960);
+    ctx.fillText(BUILDING.name || "125 Park Avenue", 72, 990);
+
     canvas.toBlob(function (blob) {
       if (!blob) return;
       var url = URL.createObjectURL(blob);
@@ -602,7 +671,7 @@
           '<span class="member-offer-label">MEMBER OFFER</span>' +
           "<h3>Free tenant signup · QR access pass</h3>" +
           '<p>' + escapeHtml(gym.tagline) + "</p>" +
-          '<button class="btn btn-primary" type="button" data-detail-gym="' + gym.id + '">View details</button>' +
+          '<button class="btn btn-primary" type="button" data-detail-gym="' + gym.id + '">View offer</button>' +
         "</div>" +
       "</article>";
     wireFallback(wrap.querySelector("img"));
@@ -808,19 +877,22 @@
     passes.forEach(function (m) {
       var el = document.createElement("button");
       el.type = "button";
-      el.className = "discover-row";
+      el.className = "membership-mini";
       el.setAttribute("data-show-pass", m.id);
       el.innerHTML =
-        '<div class="row-thumb"><img data-fallback="' + m.fallback + '" src="' + m.img + '" alt="" /></div>' +
-        '<div class="row-body">' +
-          '<span class="pill pill-new">Active pass</span>' +
-          "<h3>" + escapeHtml(m.name) + "</h3>" +
-          '<p class="row-desc">QR access · ' + escapeHtml(m.memberId) + "</p>" +
-          '<span class="row-meta">' + escapeHtml(m.location) + " · Tap to show QR</span>" +
+        '<div class="membership-mini-hero">' +
+          '<span class="membership-kicker">MEMBERSHIP</span>' +
+          "<strong>" + escapeHtml(m.name) + "</strong>" +
+          '<span class="membership-mini-tier">Tenant Access</span>' +
         "</div>" +
-        chevronSvg();
+        '<div class="membership-mini-body">' +
+          '<div class="membership-mini-meta">' +
+            "<div><span>Member ID</span><strong>" + escapeHtml(m.memberId) + "</strong></div>" +
+            '<span class="active-tier-badge">ACTIVE</span>' +
+          "</div>" +
+          '<p class="membership-mini-cta">Tap to show QR pass</p>' +
+        "</div>";
       mmList.appendChild(el);
-      wireFallback(el.querySelector("img"));
     });
 
     var upcoming = getRsvps().map(findEvent).filter(Boolean).sort(function (a, b) { return a.date - b.date; });
