@@ -53,7 +53,10 @@
     return "https://maps.google.com/?q=" + encodeURIComponent(addr);
   }
   function shortAddr(a) {
-    return a.replace(/,\s*IL\s*\d{5}$/, "").replace(/,\s*Chicago.*$/, ", Chicago");
+    return a
+      .replace(/,\s*MA\s*\d{5}$/, "")
+      .replace(/,\s*Cambridge.*$/, ", Cambridge")
+      .replace(/\s·\s.*$/, "");
   }
   function pad(n) { return n < 10 ? "0" + n : String(n); }
   function dateKey(d) {
