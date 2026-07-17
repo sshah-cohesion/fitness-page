@@ -1,0 +1,9 @@
+{
+  "name": "fitness-page",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Fitness & Wellness custom link for Cohesion",
+  "dependencies": {
+    "passkit-generator": "^3.5.7"
+  }
+}

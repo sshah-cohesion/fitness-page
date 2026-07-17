@@ -285,6 +285,10 @@
     if (state.view === "passes") renderPasses();
   }
 
+  function walletIconSvg() {
+    return '<svg class="wallet-icon" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h11.5A1.5 1.5 0 0 1 19 6.5V8h1.5A1.5 1.5 0 0 1 22 9.5v9A2.5 2.5 0 0 1 19.5 21h-13A3.5 3.5 0 0 1 3 17.5v-10Zm15 .5V6.5a.5.5 0 0 0-.5-.5H6c-.45 0-.86.2-1.14.51A3.48 3.48 0 0 1 6.5 6.5H18.5ZM4.5 8.8V17.5A2 2 0 0 0 6.5 19.5h13a1 1 0 0 0 1-1v-9a.5.5 0 0 0-.5-.5H6.2c-.66 0-1.25-.3-1.7-.8Zm12.75 5.45a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5Z"/></svg>';
+  }
+
   function openPassSheet(pass, opts) {
     openSheet(
       '<div class="pass-sheet">' +
@@ -298,8 +302,11 @@
           "<div><span>Building</span><strong>" + escapeHtml(BUILDING.name) + "</strong></div>" +
           "<div><span>Status</span><strong class=\"ok\">Active</strong></div>" +
         "</div>" +
+        '<button class="btn btn-wallet btn-block" type="button" data-wallet-gym="' + escapeHtml(pass.id) + '">' +
+          walletIconSvg() + " Add to Apple Wallet</button>" +
+        '<button class="btn btn-ghost btn-block" type="button" data-save-pass-card="' + escapeHtml(pass.id) + '">Save pass card</button>' +
         '<button class="btn btn-primary btn-block" type="button" data-sheet-close>Done</button>' +
-        '<button class="btn btn-ghost btn-block" type="button" data-goto="passes" data-sheet-close>View in My Passes</button>' +
+        '<p class="fineprint">Apple Wallet requires Pass certificates on the Vercel deploy. Save pass card works anywhere.</p>' +
       "</div>",
       {
         kind: "pass",
@@ -324,6 +331,9 @@
         "</dl>" +
         (going
           ? '<div class="rsvp-confirmed"><strong>You\'re going</strong><span>Saved in My Passes</span></div>' +
+            '<button class="btn btn-wallet btn-block" type="button" data-wallet-event="' + escapeHtml(ev.id) + '">' +
+              walletIconSvg() + " Add to Apple Wallet</button>" +
+            '<button class="btn btn-ghost btn-block" type="button" data-calendar-event="' + escapeHtml(ev.id) + '">Add to Calendar</button>' +
             '<button class="btn btn-primary btn-block" type="button" data-goto="passes" data-sheet-close>View My Passes</button>' +
             '<button class="btn btn-ghost btn-block" type="button" data-cancel-rsvp="' + ev.id + '">Cancel RSVP</button>'
           : '<button class="btn btn-primary btn-block" type="button" data-confirm-rsvp="' + ev.id + '">RSVP free</button>') +
@@ -331,6 +341,238 @@
       "</div>",
       { kind: "event" }
     );
+  }
+
+  function parseEventTimeRange(ev) {
+    // "6:30 AM – 7:30 AM"
+    var parts = String(ev.time || "").split("–").map(function (s) { return s.trim(); });
+    function toDate(part) {
+      var m = part.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+      if (!m) return new Date(ev.date.getFullYear(), ev.date.getMonth(), ev.date.getDate(), 9, 0, 0);
+      var h = parseInt(m[1], 10);
+      var min = parseInt(m[2], 10);
+      var ap = m[3].toUpperCase();
+      if (ap === "PM" && h < 12) h += 12;
+      if (ap === "AM" && h === 12) h = 0;
+      return new Date(ev.date.getFullYear(), ev.date.getMonth(), ev.date.getDate(), h, min, 0);
+    }
+    var start = toDate(parts[0] || "9:00 AM");
+    var end = parts[1] ? toDate(parts[1]) : new Date(start.getTime() + 60 * 60 * 1000);
+    return { start: start, end: end };
+  }
+
+  function toIcsDate(d) {
+    return d.getUTCFullYear() +
+      pad(d.getUTCMonth() + 1) +
+      pad(d.getUTCDate()) + "T" +
+      pad(d.getUTCHours()) +
+      pad(d.getUTCMinutes()) +
+      pad(d.getUTCSeconds()) + "Z";
+  }
+
+  function downloadCalendarEvent(ev) {
+    var range = parseEventTimeRange(ev);
+    var ics = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//125 Park Avenue//Fitness//EN",
+      "BEGIN:VEVENT",
+      "UID:" + ev.id + "@fitness.parkave",
+      "DTSTAMP:" + toIcsDate(new Date()),
+      "DTSTART:" + toIcsDate(range.start),
+      "DTEND:" + toIcsDate(range.end),
+      "SUMMARY:" + ev.title.replace(/,/g, "\\,"),
+      "LOCATION:" + (ev.place + ", " + BUILDING.address).replace(/,/g, "\\,"),
+      "DESCRIPTION:" + String(ev.description || "").replace(/,/g, "\\,"),
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+    var blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = (ev.title || "event").replace(/\s+/g, "-").toLowerCase() + ".ics";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast("Calendar file ready");
+  }
+
+  function savePassCardImage(pass) {
+    var canvas = document.createElement("canvas");
+    canvas.width = 720;
+    canvas.height = 980;
+    var ctx = canvas.getContext("2d");
+    var grad = ctx.createLinearGradient(0, 0, 720, 980);
+    grad.addColorStop(0, "#4c5bd4");
+    grad.addColorStop(1, "#7a5cff");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 720, 980);
+
+    ctx.fillStyle = "rgba(255,255,255,0.16)";
+    roundRect(ctx, 40, 40, 640, 900, 36);
+    ctx.fill();
+
+    ctx.fillStyle = "#fff";
+    ctx.font = "700 22px Inter, sans-serif";
+    ctx.fillText("125 PARK AVENUE", 80, 120);
+    ctx.font = "800 40px Inter, sans-serif";
+    wrapText(ctx, pass.name, 80, 180, 560, 48);
+    ctx.font = "500 22px Inter, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.fillText(pass.location, 80, 280);
+    ctx.fillText("Member ID  " + pass.memberId, 80, 320);
+
+    var qrCanvas = document.querySelector("#qr-wrap canvas");
+    if (qrCanvas && qrCanvas.width) {
+      ctx.fillStyle = "#fff";
+      roundRect(ctx, 180, 380, 360, 360, 24);
+      ctx.fill();
+      ctx.drawImage(qrCanvas, 200, 400, 320, 320);
+    }
+
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.font = "600 20px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Show this QR at the door · Active pass", 360, 820);
+    ctx.textAlign = "left";
+
+    canvas.toBlob(function (blob) {
+      if (!blob) return;
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = (pass.name || "pass").replace(/\s+/g, "-").toLowerCase() + "-pass.png";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      toast("Pass card saved");
+    }, "image/png");
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+    var words = String(text).split(" ");
+    var line = "";
+    var yy = y;
+    for (var n = 0; n < words.length; n++) {
+      var test = line + words[n] + " ";
+      if (ctx.measureText(test).width > maxWidth && n > 0) {
+        ctx.fillText(line, x, yy);
+        line = words[n] + " ";
+        yy += lineHeight;
+      } else {
+        line = test;
+      }
+    }
+    ctx.fillText(line, x, yy);
+  }
+
+  function downloadPkpass(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename || "pass.pkpass";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // iOS Safari / webviews often open Wallet when navigating to the pkpass URL
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+      setTimeout(function () { window.location.href = url; }, 250);
+    } else {
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    }
+  }
+
+  function addGymToWallet(pass) {
+    var btn = document.querySelector("[data-wallet-gym='" + pass.id + "']");
+    if (btn) { btn.disabled = true; btn.textContent = "Adding…"; }
+    fetch("/api/wallet-pass", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "gym",
+        serialNumber: pass.memberId || pass.id,
+        code: pass.code,
+        memberId: pass.memberId,
+        name: pass.name,
+        location: pass.location,
+        building: BUILDING.name,
+        description: "Tenant fitness access pass",
+      }),
+    }).then(function (res) {
+      if (res.status === 501) {
+        savePassCardImage(pass);
+        toast("Wallet certs not set — saved pass card instead");
+        return null;
+      }
+      if (!res.ok) throw new Error("Wallet pass failed");
+      return res.blob();
+    }).then(function (blob) {
+      if (!blob) return;
+      downloadPkpass(blob, "gym-pass.pkpass");
+      toast("Opening Apple Wallet pass");
+    }).catch(function () {
+      savePassCardImage(pass);
+      toast("Couldn't reach Wallet API — saved pass card");
+    }).finally(function () {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = walletIconSvg() + " Add to Apple Wallet";
+      }
+    });
+  }
+
+  function addEventToWallet(ev) {
+    var range = parseEventTimeRange(ev);
+    var btn = document.querySelector("[data-wallet-event='" + ev.id + "']");
+    if (btn) { btn.disabled = true; btn.textContent = "Adding…"; }
+    fetch("/api/wallet-pass", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "event",
+        serialNumber: ev.id,
+        code: "EVT|" + ev.id,
+        title: ev.title,
+        when: formatLongDate(ev.date) + " · " + ev.time,
+        place: ev.place,
+        building: BUILDING.name,
+        description: ev.description,
+        relevantDate: range.start.toISOString(),
+      }),
+    }).then(function (res) {
+      if (res.status === 501) {
+        downloadCalendarEvent(ev);
+        toast("Wallet certs not set — added calendar file instead");
+        return null;
+      }
+      if (!res.ok) throw new Error("Wallet pass failed");
+      return res.blob();
+    }).then(function (blob) {
+      if (!blob) return;
+      downloadPkpass(blob, "event-pass.pkpass");
+      toast("Opening Apple Wallet pass");
+    }).catch(function () {
+      downloadCalendarEvent(ev);
+      toast("Couldn't reach Wallet API — calendar file ready");
+    }).finally(function () {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = walletIconSvg() + " Add to Apple Wallet";
+      }
+    });
   }
 
   // ---------- Rendering ----------
@@ -679,6 +921,34 @@
     if (showPass) {
       var pass = getPass(showPass.getAttribute("data-show-pass"));
       if (pass) openPassSheet(pass);
+      return;
+    }
+
+    var walletGym = t.closest("[data-wallet-gym]");
+    if (walletGym) {
+      var wp = getPass(walletGym.getAttribute("data-wallet-gym"));
+      if (wp) addGymToWallet(wp);
+      return;
+    }
+
+    var saveCard = t.closest("[data-save-pass-card]");
+    if (saveCard) {
+      var sp = getPass(saveCard.getAttribute("data-save-pass-card"));
+      if (sp) savePassCardImage(sp);
+      return;
+    }
+
+    var walletEvent = t.closest("[data-wallet-event]");
+    if (walletEvent) {
+      var we = findEvent(walletEvent.getAttribute("data-wallet-event"));
+      if (we) addEventToWallet(we);
+      return;
+    }
+
+    var calEvent = t.closest("[data-calendar-event]");
+    if (calEvent) {
+      var ce = findEvent(calEvent.getAttribute("data-calendar-event"));
+      if (ce) downloadCalendarEvent(ce);
       return;
     }
 
