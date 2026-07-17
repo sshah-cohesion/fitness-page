@@ -302,11 +302,12 @@
           "<div><span>Building</span><strong>" + escapeHtml(BUILDING.name) + "</strong></div>" +
           "<div><span>Status</span><strong class=\"ok\">Active</strong></div>" +
         "</div>" +
+        '<button class="btn btn-primary btn-block" type="button" data-goto="passes">View in My Passes</button>' +
         '<button class="btn btn-wallet btn-block" type="button" data-wallet-gym="' + escapeHtml(pass.id) + '">' +
           walletIconSvg() + " Add to Apple Wallet</button>" +
         '<button class="btn btn-ghost btn-block" type="button" data-save-pass-card="' + escapeHtml(pass.id) + '">Save pass card</button>' +
-        '<button class="btn btn-primary btn-block" type="button" data-sheet-close>Done</button>' +
-        '<p class="fineprint">Apple Wallet requires Pass certificates on the Vercel deploy. Save pass card works anywhere.</p>' +
+        '<button class="btn btn-ghost btn-block" type="button" data-sheet-close>Done</button>' +
+        '<p class="fineprint">Your pass is saved in My Passes. Apple Wallet needs Pass certificates on Vercel.</p>' +
       "</div>",
       {
         kind: "pass",
@@ -899,6 +900,14 @@
   document.addEventListener("click", function (e) {
     var t = e.target;
 
+    // Navigate first — buttons often combine data-goto + data-sheet-close
+    var goto = t.closest("[data-goto]");
+    if (goto) {
+      closeSheet();
+      setView(goto.getAttribute("data-goto"));
+      return;
+    }
+
     if (t.closest("[data-sheet-close]")) {
       closeSheet();
       return;
@@ -983,13 +992,6 @@
       renderDayEvents();
       renderTeaser();
       if (state.view === "passes") renderPasses();
-      return;
-    }
-
-    var goto = t.closest("[data-goto]");
-    if (goto) {
-      closeSheet();
-      setView(goto.getAttribute("data-goto"));
     }
   });
 
