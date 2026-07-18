@@ -242,17 +242,29 @@
     var card = sheet.querySelector(".sheet-card");
     if (card) {
       card.classList.toggle("is-membership", !!(opts && opts.membership));
+      card.classList.remove("is-visible");
     }
     sheet.hidden = false;
     document.body.classList.add("sheet-open");
+    // Native-feeling slide-up on next frame
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        if (card) card.classList.add("is-visible");
+        sheet.classList.add("is-open");
+      });
+    });
     if (opts && opts.afterRender) opts.afterRender(sheetBody);
   }
   function closeSheet() {
-    sheet.hidden = true;
-    sheetBody.innerHTML = "";
-    document.body.classList.remove("sheet-open");
     var card = sheet.querySelector(".sheet-card");
-    if (card) card.classList.remove("is-membership");
+    sheet.classList.remove("is-open");
+    if (card) card.classList.remove("is-visible");
+    document.body.classList.remove("sheet-open");
+    setTimeout(function () {
+      sheet.hidden = true;
+      sheetBody.innerHTML = "";
+      if (card) card.classList.remove("is-membership");
+    }, 220);
   }
 
   function renderQrCanvas(container, payload) {
@@ -265,8 +277,9 @@
       }
       return;
     }
+    var size = window.matchMedia("(max-height: 760px)").matches ? 148 : 176;
     QRCode.toCanvas(canvas, payload, {
-      width: 200,
+      width: size,
       margin: 1,
       color: { dark: "#1c2230", light: "#ffffff" },
     }, function () {});
@@ -287,7 +300,6 @@
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
     };
     savePass(entry);
-    toast("You're in — QR pass ready");
     openPassSheet(entry, { justJoined: true });
     renderBuildingGyms();
     renderFeatured();
@@ -308,37 +320,43 @@
     }
     openSheet(
       '<div class="pass-sheet membership-pass">' +
-        '<div class="membership-hero">' +
-          '<div class="membership-hero-bg" aria-hidden="true"></div>' +
-          '<p class="membership-kicker">MEMBERSHIP PROGRAM</p>' +
-          '<h2 id="sheet-title">' + escapeHtml(fresh.name) + "</h2>" +
-          '<p class="membership-tier">' +
-            (opts && opts.justJoined ? "Welcome · " : "") +
-            "Tenant Access Member" +
-          "</p>" +
-        "</div>" +
-        '<div class="membership-body">' +
-          '<p class="pass-sub">Show this QR at the door for access</p>' +
-          '<div class="qr-wrap" id="qr-wrap"><canvas></canvas></div>' +
-          '<p class="qr-rotate-note">One-time code · refreshes each time you open this pass</p>' +
-          '<div class="membership-panel">' +
-            '<div class="membership-panel-top">' +
-              "<div>" +
-                '<span class="membership-panel-label">Your access</span>' +
-                '<strong class="membership-panel-value">' + escapeHtml(fresh.memberId) + "</strong>" +
+        '<div class="membership-scroll">' +
+          '<div class="membership-hero">' +
+            '<div class="membership-hero-bg" aria-hidden="true"></div>' +
+            '<p class="membership-kicker">MEMBERSHIP PROGRAM</p>' +
+            '<h2 id="sheet-title">' + escapeHtml(fresh.name) + "</h2>" +
+            '<p class="membership-tier">' +
+              (opts && opts.justJoined ? "Welcome · " : "") +
+              "Tenant Access Member" +
+            "</p>" +
+          "</div>" +
+          '<div class="membership-body">' +
+            '<p class="pass-sub">Show this QR at the door for access</p>' +
+            '<div class="qr-wrap" id="qr-wrap"><canvas></canvas></div>' +
+            '<p class="qr-rotate-note">One-time code · refreshes each time you open this pass</p>' +
+            '<div class="membership-panel">' +
+              '<div class="membership-panel-top">' +
+                "<div>" +
+                  '<span class="membership-panel-label">Your access</span>' +
+                  '<strong class="membership-panel-value">' + escapeHtml(fresh.memberId) + "</strong>" +
+                "</div>" +
+                '<span class="active-tier-badge">ACTIVE PASS</span>' +
               "</div>" +
-              '<span class="active-tier-badge">ACTIVE PASS</span>' +
-            "</div>" +
-            '<div class="membership-panel-grid">' +
-              "<div><span>Location</span><strong>" + escapeHtml(fresh.location) + "</strong></div>" +
-              "<div><span>Building</span><strong>" + escapeHtml(BUILDING.name) + "</strong></div>" +
+              '<div class="membership-panel-grid">' +
+                "<div><span>Location</span><strong>" + escapeHtml(fresh.location) + "</strong></div>" +
+                "<div><span>Building</span><strong>" + escapeHtml(BUILDING.name) + "</strong></div>" +
+              "</div>" +
             "</div>" +
           "</div>" +
+        "</div>" +
+        '<div class="membership-actions">' +
           '<button class="btn btn-primary btn-block" type="button" data-goto="passes">View in My Passes</button>' +
-          '<button class="btn btn-membership btn-block" type="button" data-save-pass-card="' +
-            escapeHtml(fresh.id) +
-            '">Save pass card</button>' +
-          '<button class="btn btn-ghost btn-block" type="button" data-sheet-close>Done</button>' +
+          '<div class="membership-actions-row">' +
+            '<button class="btn btn-membership btn-block" type="button" data-save-pass-card="' +
+              escapeHtml(fresh.id) +
+              '">Save card</button>' +
+            '<button class="btn btn-ghost btn-block" type="button" data-sheet-close>Done</button>' +
+          "</div>" +
         "</div>" +
       "</div>",
       {
@@ -352,18 +370,33 @@
 
   // ---------- Detail page (in-app, no browser history) ----------
   function closeDetail() {
+    var wasOpen = !detailPage.hidden;
     state.detail = null;
-    detailPage.hidden = true;
-    detailBody.innerHTML = "";
+    detailPage.classList.remove("is-visible");
     document.body.classList.remove("detail-open");
-    document.getElementById("app-shell").hidden = false;
+    function finish() {
+      detailPage.hidden = true;
+      detailBody.innerHTML = "";
+      document.getElementById("app-shell").hidden = false;
+    }
+    if (!wasOpen) {
+      finish();
+      return;
+    }
+    setTimeout(finish, 200);
   }
 
   function openDetail(detail) {
     state.detail = detail;
     document.getElementById("app-shell").hidden = true;
     detailPage.hidden = false;
+    detailPage.classList.remove("is-visible");
     document.body.classList.add("detail-open");
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        detailPage.classList.add("is-visible");
+      });
+    });
     window.scrollTo(0, 0);
 
     if (detail.kind === "gym") {
@@ -385,42 +418,44 @@
     var signed = isSignedUp(gym.id);
     document.getElementById("detail-nav-title").textContent = "Gym";
     detailBody.innerHTML =
-      '<div class="detail-hero">' +
-        '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="' + escapeHtml(gym.name) + '" />' +
-        '<div class="detail-hero-badges">' +
-          '<span class="pill ' + (signed ? "pill-new" : "pill-free") + '">' + (signed ? "Your pass" : "Free signup") + "</span>" +
+      '<div class="detail-main">' +
+        '<div class="detail-hero">' +
+          '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="' + escapeHtml(gym.name) + '" />' +
+          '<div class="detail-hero-badges">' +
+            '<span class="pill ' + (signed ? "pill-new" : "pill-free") + '">' + (signed ? "Your pass" : "Free signup") + "</span>" +
+          "</div>" +
+        "</div>" +
+        '<div class="detail-content">' +
+          '<span class="detail-cat">' + escapeHtml(gym.category) + "</span>" +
+          "<h2>" + escapeHtml(gym.name) + "</h2>" +
+          '<a class="addr" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener">' + escapeHtml(shortAddr(gym.address) || gym.location) + "</a>" +
+          '<p class="detail-dist">' + escapeHtml(gym.distance) + " · " + escapeHtml(gym.hours) + "</p>" +
+          '<div class="detail-divider"></div>' +
+          '<span class="member-offer-label">MEMBERSHIP PROGRAM</span>' +
+          "<h3>Member perks · free tenant signup</h3>" +
+          '<p class="detail-desc">' + escapeHtml(gym.tagline) + "</p>" +
+          (signed
+            ? '<div class="membership-panel detail-membership-panel">' +
+                '<div class="membership-panel-top">' +
+                  "<div><span class=\"membership-panel-label\">Your access</span>" +
+                  '<strong class="membership-panel-value">Tenant Access</strong></div>' +
+                  '<span class="active-tier-badge">ACTIVE PASS</span>' +
+                "</div>" +
+              "</div>"
+            : "") +
+          '<ul class="perk-list">' +
+            (gym.perks || []).map(function (p) {
+              return "<li><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M5 12.5 10 17.5 19 7\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>" +
+                escapeHtml(p) + "</li>";
+            }).join("") +
+          "</ul>" +
         "</div>" +
       "</div>" +
-      '<div class="detail-content">' +
-        '<span class="detail-cat">' + escapeHtml(gym.category) + "</span>" +
-        "<h2>" + escapeHtml(gym.name) + "</h2>" +
-        '<a class="addr" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener">' + escapeHtml(shortAddr(gym.address) || gym.location) + "</a>" +
-        '<p class="detail-dist">' + escapeHtml(gym.distance) + " · " + escapeHtml(gym.hours) + "</p>" +
-        '<div class="detail-divider"></div>' +
-        '<span class="member-offer-label">MEMBERSHIP PROGRAM</span>' +
-        "<h3>Member perks · free tenant signup</h3>" +
-        '<p class="detail-desc">' + escapeHtml(gym.tagline) + "</p>" +
+      '<div class="detail-sticky">' +
         (signed
-          ? '<div class="membership-panel detail-membership-panel">' +
-              '<div class="membership-panel-top">' +
-                "<div><span class=\"membership-panel-label\">Your access</span>" +
-                '<strong class="membership-panel-value">Tenant Access</strong></div>' +
-                '<span class="active-tier-badge">ACTIVE PASS</span>' +
-              "</div>" +
-            "</div>"
-          : "") +
-        '<ul class="perk-list">' +
-          (gym.perks || []).map(function (p) {
-            return "<li><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M5 12.5 10 17.5 19 7\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>" +
-              escapeHtml(p) + "</li>";
-          }).join("") +
-        "</ul>" +
-        '<div class="detail-actions">' +
-          (signed
-            ? '<button class="btn btn-primary btn-block" type="button" data-show-pass="' + gym.id + '">Show membership QR</button>'
-            : '<button class="btn btn-primary btn-block" type="button" data-confirm-signup="' + gym.id + '">Join free · get QR pass</button>') +
-          '<a class="btn btn-ghost btn-block" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener">Get directions</a>' +
-        "</div>" +
+          ? '<button class="btn btn-primary btn-block" type="button" data-show-pass="' + gym.id + '">Show membership QR</button>'
+          : '<button class="btn btn-primary btn-block" type="button" data-confirm-signup="' + gym.id + '">Join free · get QR pass</button>') +
+        '<a class="btn btn-ghost btn-block" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener">Get directions</a>' +
       "</div>";
     wireFallback(detailBody.querySelector("img"));
   }
@@ -428,24 +463,26 @@
   function renderStudioDetail(studio) {
     document.getElementById("detail-nav-title").textContent = "Studio";
     detailBody.innerHTML =
-      '<div class="detail-hero">' +
-        '<img data-fallback="' + studio.fallback + '" src="' + studio.img + '" alt="' + escapeHtml(studio.name) + '" />' +
-        '<div class="detail-hero-badges">' + (studio.badges || []).map(badgePill).join("") + "</div>" +
-      "</div>" +
-      '<div class="detail-content">' +
-        '<span class="detail-cat">' + escapeHtml(studio.category) + "</span>" +
-        "<h2>" + escapeHtml(studio.name) + "</h2>" +
-        '<div class="detail-rating">' + starSvg() + " " + studio.rating.toFixed(1) +
-          ' <span>(' + studio.reviews + " reviews)</span></div>" +
-        '<a class="addr" href="' + mapUrl(studio.address) + '" target="_blank" rel="noopener">' + escapeHtml(shortAddr(studio.address)) + "</a>" +
-        '<p class="detail-dist">' + escapeHtml(studio.distance) + "</p>" +
-        '<div class="detail-divider"></div>' +
-        '<span class="member-offer-label">NEARBY PARTNER</span>' +
-        "<h3>Studio details</h3>" +
-        '<p class="detail-desc">' + escapeHtml(studio.tagline) + "</p>" +
-        '<div class="detail-actions">' +
-          '<a class="btn btn-primary btn-block" href="' + mapUrl(studio.address) + '" target="_blank" rel="noopener">Get directions</a>' +
+      '<div class="detail-main">' +
+        '<div class="detail-hero">' +
+          '<img data-fallback="' + studio.fallback + '" src="' + studio.img + '" alt="' + escapeHtml(studio.name) + '" />' +
+          '<div class="detail-hero-badges">' + (studio.badges || []).map(badgePill).join("") + "</div>" +
         "</div>" +
+        '<div class="detail-content">' +
+          '<span class="detail-cat">' + escapeHtml(studio.category) + "</span>" +
+          "<h2>" + escapeHtml(studio.name) + "</h2>" +
+          '<div class="detail-rating">' + starSvg() + " " + studio.rating.toFixed(1) +
+            ' <span>(' + studio.reviews + " reviews)</span></div>" +
+          '<a class="addr" href="' + mapUrl(studio.address) + '" target="_blank" rel="noopener">' + escapeHtml(shortAddr(studio.address)) + "</a>" +
+          '<p class="detail-dist">' + escapeHtml(studio.distance) + "</p>" +
+          '<div class="detail-divider"></div>' +
+          '<span class="member-offer-label">NEARBY PARTNER</span>' +
+          "<h3>Studio details</h3>" +
+          '<p class="detail-desc">' + escapeHtml(studio.tagline) + "</p>" +
+        "</div>" +
+      "</div>" +
+      '<div class="detail-sticky">' +
+        '<a class="btn btn-primary btn-block" href="' + mapUrl(studio.address) + '" target="_blank" rel="noopener">Get directions</a>' +
       "</div>";
     wireFallback(detailBody.querySelector("img"));
   }
@@ -454,28 +491,32 @@
     var going = hasRsvp(ev.id);
     document.getElementById("detail-nav-title").textContent = "Event";
     detailBody.innerHTML =
-      '<div class="detail-hero detail-hero-event type-' + ev.type + '">' +
-        '<div class="detail-hero-event-inner">' +
-          '<span class="type-pill type-' + ev.type + '">' + (TYPE_LABELS[ev.type] || ev.type) + "</span>" +
-          "<h2>" + escapeHtml(ev.title) + "</h2>" +
-          "<p>" + escapeHtml(formatLongDate(ev.date)) + "</p>" +
+      '<div class="detail-main">' +
+        '<div class="detail-hero detail-hero-event type-' + ev.type + '">' +
+          '<div class="detail-hero-event-inner">' +
+            '<span class="type-pill type-' + ev.type + '">' + (TYPE_LABELS[ev.type] || ev.type) + "</span>" +
+            "<h2>" + escapeHtml(ev.title) + "</h2>" +
+            "<p>" + escapeHtml(formatLongDate(ev.date)) + "</p>" +
+          "</div>" +
+        "</div>" +
+        '<div class="detail-content">' +
+          '<dl class="event-meta">' +
+            "<div><dt>When</dt><dd>" + escapeHtml(ev.time) + "</dd></div>" +
+            "<div><dt>Where</dt><dd>" + escapeHtml(ev.place) + "</dd></div>" +
+            "<div><dt>Spots</dt><dd>" + ev.spots + " tenant spots</dd></div>" +
+          "</dl>" +
+          '<p class="detail-desc">' + escapeHtml(ev.description) + "</p>" +
+          (going ? '<div class="rsvp-confirmed"><strong>You\'re going</strong><span>Saved in My Passes</span></div>' : "") +
         "</div>" +
       "</div>" +
-      '<div class="detail-content">' +
-        '<dl class="event-meta">' +
-          "<div><dt>When</dt><dd>" + escapeHtml(ev.time) + "</dd></div>" +
-          "<div><dt>Where</dt><dd>" + escapeHtml(ev.place) + "</dd></div>" +
-          "<div><dt>Spots</dt><dd>" + ev.spots + " tenant spots</dd></div>" +
-        "</dl>" +
-        '<p class="detail-desc">' + escapeHtml(ev.description) + "</p>" +
-        '<div class="detail-actions">' +
-          (going
-            ? '<div class="rsvp-confirmed"><strong>You\'re going</strong><span>Saved in My Passes</span></div>' +
-              '<button class="btn btn-ghost btn-block" type="button" data-calendar-event="' + escapeHtml(ev.id) + '">Add to Calendar</button>' +
-              '<button class="btn btn-primary btn-block" type="button" data-goto="passes">View My Passes</button>' +
-              '<button class="btn btn-ghost btn-block" type="button" data-cancel-rsvp="' + ev.id + '">Cancel RSVP</button>'
-            : '<button class="btn btn-primary btn-block" type="button" data-confirm-rsvp="' + ev.id + '">RSVP free</button>') +
-        "</div>" +
+      '<div class="detail-sticky">' +
+        (going
+          ? '<button class="btn btn-primary btn-block" type="button" data-goto="passes">View My Passes</button>' +
+            '<div class="membership-actions-row">' +
+              '<button class="btn btn-ghost btn-block" type="button" data-calendar-event="' + escapeHtml(ev.id) + '">Calendar</button>' +
+              '<button class="btn btn-ghost btn-block" type="button" data-cancel-rsvp="' + ev.id + '">Cancel</button>' +
+            "</div>"
+          : '<button class="btn btn-primary btn-block" type="button" data-confirm-rsvp="' + ev.id + '">RSVP free</button>') +
       "</div>";
   }
 
