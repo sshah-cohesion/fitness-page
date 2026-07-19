@@ -700,22 +700,46 @@
       '<article class="featured-card" data-detail-gym="' + gym.id + '">' +
         '<div class="featured-media">' +
           '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="' + escapeHtml(gym.name) + '" />' +
-          '<span class="pill ' + (signed ? "pill-new" : "pill-free") + '">' + (signed ? "Your pass" : "New offer") + "</span>" +
         "</div>" +
         '<div class="featured-body">' +
+          '<span class="pill ' + (signed ? "pill-new" : "pill-free") + '">' + (signed ? "Your pass" : "New offer") + "</span>" +
           "<h2>" + escapeHtml(gym.name) + "</h2>" +
-          '<a class="addr" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' +
-            escapeHtml(shortAddr(gym.address) || gym.location) +
-          "</a>" +
-          '<p class="featured-dist">' + escapeHtml(gym.distance) + "</p>" +
+          '<div class="featured-loc">' +
+            '<a class="addr" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' +
+              escapeHtml(shortAddr(gym.address) || gym.location) +
+            "</a>" +
+            '<span class="featured-dist">' + escapeHtml(gym.distance) + "</span>" +
+          "</div>" +
           '<div class="detail-divider"></div>' +
           '<span class="member-offer-label">MEMBER OFFER</span>' +
           "<h3>Free tenant signup · QR access pass</h3>" +
-          '<p>' + escapeHtml(gym.tagline) + "</p>" +
+          "<p>" + escapeHtml(gym.tagline) + "</p>" +
           '<button class="btn btn-primary" type="button" data-detail-gym="' + gym.id + '">View offer</button>' +
         "</div>" +
       "</article>";
     wireFallback(wrap.querySelector("img"));
+  }
+
+  function discoverCardHtml(opts) {
+    return (
+      '<div class="discover-card-media">' +
+        '<img data-fallback="' + opts.fallback + '" src="' + opts.img + '" alt=""' + (opts.lazy ? ' loading="lazy"' : "") + " />" +
+        '<div class="discover-card-tags">' + (opts.tagsHtml || "") + "</div>" +
+      "</div>" +
+      '<div class="discover-card-body">' +
+        "<h3>" + escapeHtml(opts.name) + "</h3>" +
+        '<span class="row-cat">' + escapeHtml(opts.category) + "</span>" +
+        '<a class="addr" href="' + mapUrl(opts.address) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' +
+          escapeHtml(opts.addressLabel) +
+        "</a>" +
+        '<span class="row-meta">' + opts.metaHtml + "</span>" +
+        (opts.desc ? '<p class="row-desc mobile-row-desc">' + escapeHtml(opts.desc) + "</p>" : "") +
+        '<span class="view-details-link">View details</span>' +
+      "</div>" +
+      '<span class="row-chevron mobile-chevron" aria-hidden="true">' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      "</span>"
+    );
   }
 
   function renderBuildingGyms() {
@@ -724,29 +748,25 @@
     wrap.innerHTML = "";
     BUILDING_GYMS.forEach(function (gym) {
       var signed = isSignedUp(gym.id);
-      var row = document.createElement("button");
-      row.type = "button";
-      row.className = "discover-row";
-      row.setAttribute("data-detail-gym", gym.id);
-      row.innerHTML =
-        '<div class="row-thumb">' +
-          '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="" />' +
-        "</div>" +
-        '<div class="row-body">' +
-          '<div class="row-badges">' +
-            '<span class="pill ' + (signed ? "pill-new" : "pill-free") + '">' + (signed ? "Your pass" : "Free signup") + "</span>" +
-          "</div>" +
-          '<span class="row-cat">' + escapeHtml(gym.category) + "</span>" +
-          '<a class="addr" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' +
-            escapeHtml(gym.location) +
-          "</a>" +
-          "<h3>" + escapeHtml(gym.name) + "</h3>" +
-          '<p class="row-desc">' + escapeHtml(gym.tagline) + "</p>" +
-          '<span class="row-meta">' + escapeHtml(gym.hours) + "</span>" +
-        "</div>" +
-        chevronSvg();
-      wrap.appendChild(row);
-      wireFallback(row.querySelector("img"));
+      var card = document.createElement("button");
+      card.type = "button";
+      card.className = "discover-card";
+      card.setAttribute("data-detail-gym", gym.id);
+      card.innerHTML = discoverCardHtml({
+        img: gym.img,
+        fallback: gym.fallback,
+        name: gym.name,
+        category: gym.category,
+        address: gym.address,
+        addressLabel: gym.location,
+        desc: gym.tagline,
+        tagsHtml: '<span class="pill ' + (signed ? "pill-new" : "pill-free") + '">' +
+          (signed ? "Your pass" : "Free signup") + "</span>" +
+          '<span class="pill pill-soft">Membership Perks</span>',
+        metaHtml: escapeHtml(gym.hours),
+      });
+      wrap.appendChild(card);
+      wireFallback(card.querySelector("img"));
     });
   }
 
@@ -778,32 +798,62 @@
 
   function renderGrid() {
     var list = GYMS.filter(matches);
-    if (state.view === "discover") list = list.slice(0, 4);
+    if (state.view === "discover") list = list.slice(0, 8);
     grid.innerHTML = "";
     empty.hidden = list.length !== 0;
     list.forEach(function (gym) {
-      var row = document.createElement("button");
-      row.type = "button";
-      row.className = "discover-row";
-      row.setAttribute("data-detail-studio", gym.id);
-      row.innerHTML =
-        '<div class="row-thumb">' +
-          '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="" loading="lazy" />' +
-        "</div>" +
-        '<div class="row-body">' +
-          '<div class="row-badges">' + (gym.badges || []).map(badgePill).join("") + "</div>" +
-          '<span class="row-cat">' + escapeHtml(gym.category) + "</span>" +
-          '<a class="addr" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' +
-            escapeHtml(shortAddr(gym.address)) +
-          "</a>" +
-          "<h3>" + escapeHtml(gym.name) + "</h3>" +
-          '<p class="row-desc">' + escapeHtml(gym.tagline) + "</p>" +
-          '<span class="row-meta">' + escapeHtml(gym.distance) + " · " + starSvg() + " " + gym.rating.toFixed(1) + "</span>" +
-        "</div>" +
-        chevronSvg();
-      grid.appendChild(row);
-      wireFallback(row.querySelector("img"));
+      var card = document.createElement("button");
+      card.type = "button";
+      card.className = "discover-card";
+      card.setAttribute("data-detail-studio", gym.id);
+      var tags = (gym.badges || []).map(badgePill).join("") +
+        '<span class="pill pill-soft">' + escapeHtml(gym.category.split("&")[0].trim()) + "</span>";
+      card.innerHTML = discoverCardHtml({
+        img: gym.img,
+        fallback: gym.fallback,
+        lazy: true,
+        name: gym.name,
+        category: gym.category,
+        address: gym.address,
+        addressLabel: shortAddr(gym.address),
+        desc: gym.tagline,
+        tagsHtml: tags,
+        metaHtml: escapeHtml(gym.distance) + " · " + starSvg() + " " + gym.rating.toFixed(1),
+      });
+      grid.appendChild(card);
+      wireFallback(card.querySelector("img"));
     });
+  }
+
+  function syncPageHeader(view) {
+    var titles = {
+      discover: "Discover",
+      events: "Events",
+      studios: "Studios",
+      passes: "My Passes",
+    };
+    var descs = {
+      discover: "Tenant gyms, membership passes, and nearby fitness studios around 125 Park Avenue.",
+      events: "RSVP free to building fitness events — confirmed classes appear in My Passes.",
+      studios: "Local Midtown partner studios near 125 Park Avenue.",
+      passes: "Your gym access cards and event RSVPs — open a pass to show the QR.",
+    };
+    var titleEl = document.getElementById("page-title");
+    var crumb = document.getElementById("breadcrumb-view");
+    var desc = document.getElementById("page-desc");
+    if (titleEl) titleEl.textContent = titles[view] || "Discover";
+    if (crumb) crumb.textContent = titles[view] || "Discover";
+    if (desc) desc.textContent = descs[view] || descs.discover;
+  }
+
+  function setFilter(value) {
+    state.filter = value || "all";
+    Array.prototype.forEach.call(document.querySelectorAll(".chip"), function (c) {
+      c.classList.toggle("is-active", c.getAttribute("data-filter") === state.filter);
+    });
+    var sel = document.getElementById("filter-select");
+    if (sel && sel.value !== state.filter) sel.value = state.filter;
+    renderGrid();
   }
 
   function renderWeekStrip() {
@@ -977,6 +1027,7 @@
       t.classList.toggle("is-active", t.getAttribute("data-tab") === view);
     });
     document.title = "Fitness · " + VIEWS[view];
+    syncPageHeader(view);
     if (!(opts && opts.fromHash)) syncUrl(view);
 
     if (view === "passes") renderPasses();
@@ -1003,12 +1054,15 @@
   chipsWrap.addEventListener("click", function (e) {
     var chip = e.target.closest(".chip");
     if (!chip) return;
-    state.filter = chip.getAttribute("data-filter");
-    Array.prototype.forEach.call(chipsWrap.children, function (c) {
-      c.classList.toggle("is-active", c === chip);
-    });
-    renderGrid();
+    setFilter(chip.getAttribute("data-filter"));
   });
+
+  var filterSelect = document.getElementById("filter-select");
+  if (filterSelect) {
+    filterSelect.addEventListener("change", function () {
+      setFilter(filterSelect.value);
+    });
+  }
 
   searchInput.addEventListener("input", function () {
     state.query = searchInput.value;

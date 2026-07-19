@@ -23,7 +23,12 @@
         <div class="topbar-head">
           <div class="topbar-title">
             <p class="building-chip" id="building-chip">125 Park Avenue</p>
-            <h1>Fitness &amp; Wellness</h1>
+            <h1 class="mobile-title">Fitness &amp; Wellness</h1>
+            <div class="page-heading">
+              <p class="breadcrumb">Fitness &amp; Wellness / <span id="breadcrumb-view">Discover</span></p>
+              <h1 id="page-title">Discover</h1>
+              <p class="page-desc" id="page-desc">Tenant gyms, membership passes, and nearby fitness studios around 125 Park Avenue.</p>
+            </div>
           </div>
           <nav class="tabs" aria-label="Sections">
             <button class="tab is-active" data-tab="discover" type="button">Discover</button>
@@ -36,8 +41,13 @@
     </header>
 
     <main class="wrap content">
-      <!-- Discover -->
-      <section class="only-discover" id="featured-wrap"></section>
+      <!-- Discover featured -->
+      <section class="only-discover featured-section">
+        <div class="section-kicker">
+          <span class="section-label">FEATURED</span>
+        </div>
+        <div id="featured-wrap"></div>
+      </section>
 
       <section class="building-gyms only-discover">
         <div class="section-head">
@@ -45,7 +55,7 @@
           <h2 class="section-title">Complimentary tenant gyms</h2>
           <p class="section-sub">Sign up free — get a QR access pass you can show at the door.</p>
         </div>
-        <div class="discover-list" id="building-grid"></div>
+        <div class="discover-grid" id="building-grid"></div>
       </section>
 
       <section class="events-teaser only-discover">
@@ -67,13 +77,40 @@
         <button class="btn btn-ghost" data-goto="studios" type="button">See all</button>
       </div>
 
-      <div class="view-heading only-studios">
+      <div class="view-heading only-studios mobile-only-heading">
         <span class="section-label">NEARBY STUDIOS</span>
         <h2>Partner studios near 125 Park Ave</h2>
         <p class="section-sub">Local Midtown partners — tap a studio for details.</p>
       </div>
 
-      <section class="filters not-passes not-events">
+      <section class="filters not-passes not-events" aria-label="Filters">
+        <div class="filter-bar">
+          <div class="filter-bar-left">
+            <label class="filter-select">
+              <span class="sr-only">Filter</span>
+              <select id="filter-select" aria-label="Filter listings">
+                <option value="all">All</option>
+                <option value="new">New</option>
+                <option value="popular">Popular</option>
+                <option value="limited">Limited</option>
+                <option value="strength">Strength</option>
+                <option value="yoga">Yoga</option>
+                <option value="cycle">Cycle</option>
+                <option value="boxing">Boxing</option>
+              </select>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+            <div class="filter-legend" aria-hidden="true">
+              <span><i class="dot dot-green"></i>New</span>
+              <span><i class="dot dot-red"></i>Popular</span>
+              <span><i class="dot dot-amber"></i>Limited</span>
+            </div>
+          </div>
+          <label class="search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m20 20-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <input id="search" type="search" placeholder="Search nearby" autocomplete="off" />
+          </label>
+        </div>
         <div class="chips" id="chips">
           <button class="chip is-active" data-filter="all" type="button">All</button>
           <button class="chip" data-filter="new" type="button"><span class="dot dot-green"></span>New</button>
@@ -84,18 +121,14 @@
           <button class="chip" data-filter="cycle" type="button">Cycle</button>
           <button class="chip" data-filter="boxing" type="button">Boxing</button>
         </div>
-        <label class="search">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m20 20-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-          <input id="search" type="search" placeholder="Search nearby" autocomplete="off" />
-        </label>
       </section>
 
-      <section class="discover-list not-passes not-events" id="grid" aria-live="polite"></section>
+      <section class="discover-grid not-passes not-events" id="grid" aria-live="polite"></section>
       <p class="empty not-passes not-events" id="empty" hidden>No studios match your filters.</p>
 
       <!-- Events -->
       <section class="events-view only-events" id="eventsView">
-        <div class="view-heading">
+        <div class="view-heading mobile-only-heading">
           <span class="section-label">FITNESS CALENDAR</span>
           <h2>Building fitness events</h2>
           <p class="section-sub">RSVP free — confirmed events appear in My Passes.</p>
@@ -134,33 +167,35 @@
 
       <!-- My Passes -->
       <section class="passes-view only-passes" id="passesView">
-        <div class="view-heading">
+        <div class="view-heading mobile-only-heading">
           <span class="section-label">MEMBERSHIP</span>
           <h2>My passes &amp; perks</h2>
           <p class="section-sub">Your gym access cards and event RSVPs — tap a pass to show the QR.</p>
         </div>
 
-        <div class="passes-block">
-          <div class="passes-block-head">
-            <h3>Gym memberships</h3>
-            <span class="count-pill" id="gym-count">0</span>
+        <div class="passes-layout">
+          <div class="passes-block">
+            <div class="passes-block-head">
+              <h3>Gym memberships</h3>
+              <span class="count-pill" id="gym-count">0</span>
+            </div>
+            <div id="mm-list" class="mm-list"></div>
+            <div id="mm-empty" class="mm-empty compact">
+              <p>No gym passes yet. Sign up free from Discover.</p>
+              <button class="btn btn-primary" data-goto="discover" type="button">Browse gyms</button>
+            </div>
           </div>
-          <div id="mm-list" class="mm-list"></div>
-          <div id="mm-empty" class="mm-empty compact">
-            <p>No gym passes yet. Sign up free from Discover.</p>
-            <button class="btn btn-primary" data-goto="discover" type="button">Browse gyms</button>
-          </div>
-        </div>
 
-        <div class="passes-block">
-          <div class="passes-block-head">
-            <h3>My events</h3>
-            <span class="count-pill" id="rsvp-count">0</span>
-          </div>
-          <div id="rsvp-list" class="rsvp-list"></div>
-          <div id="rsvp-empty" class="mm-empty compact">
-            <p>No RSVPs yet. Reserve a class from Events.</p>
-            <button class="btn btn-ghost" data-goto="events" type="button">Browse events</button>
+          <div class="passes-block">
+            <div class="passes-block-head">
+              <h3>My events</h3>
+              <span class="count-pill" id="rsvp-count">0</span>
+            </div>
+            <div id="rsvp-list" class="rsvp-list"></div>
+            <div id="rsvp-empty" class="mm-empty compact">
+              <p>No RSVPs yet. Reserve a class from Events.</p>
+              <button class="btn btn-ghost" data-goto="events" type="button">Browse events</button>
+            </div>
           </div>
         </div>
       </section>
