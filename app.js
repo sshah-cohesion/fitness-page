@@ -906,7 +906,10 @@
     var content = document.getElementById("passes-content");
     if (!card) return;
     card.hidden = !show;
-    if (content) content.classList.toggle("is-dimmed", !!show);
+    if (content) {
+      content.hidden = !!show;
+      content.classList.remove("is-dimmed");
+    }
     if (show) {
       perkStep = 0;
       renderPerkStep();
