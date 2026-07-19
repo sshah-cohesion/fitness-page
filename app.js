@@ -832,6 +832,12 @@
       studios: "Studios",
       passes: "My Passes",
     };
+    var mobileTitles = {
+      discover: "Fitness & Wellness",
+      events: "Events",
+      studios: "Studios",
+      passes: "Membership",
+    };
     var descs = {
       discover: "Tenant gyms, membership passes, and nearby fitness studios around 125 Park Avenue.",
       events: "RSVP free to building fitness events — confirmed classes appear in My Passes.",
@@ -841,9 +847,76 @@
     var titleEl = document.getElementById("page-title");
     var crumb = document.getElementById("breadcrumb-view");
     var desc = document.getElementById("page-desc");
+    var mobileTitle = document.querySelector(".mobile-title");
     if (titleEl) titleEl.textContent = titles[view] || "Discover";
     if (crumb) crumb.textContent = titles[view] || "Discover";
     if (desc) desc.textContent = descs[view] || descs.discover;
+    if (mobileTitle) mobileTitle.textContent = mobileTitles[view] || "Fitness & Wellness";
+    document.body.classList.toggle("app-membership", view === "passes");
+  }
+
+  var PERK_STEPS = [
+    {
+      title: "Welcome to Member Perks",
+      body: "A curated set of building-only fitness offers, gym access passes, and wellness benefits for the 125 Park Avenue community.",
+      next: "Next",
+    },
+    {
+      title: "Free tenant gym access",
+      body: "Sign up for complimentary in-building gyms — no monthly fee for tenants. Your digital pass lives in Membership.",
+      next: "Next",
+    },
+    {
+      title: "Show your QR at the door",
+      body: "Each pass includes a one-time QR code that refreshes when you open it. Present it for entry anytime.",
+      next: "Next",
+    },
+    {
+      title: "RSVP to fitness events",
+      body: "Reserve building classes free. Confirmed RSVPs appear here next to your gym memberships.",
+      next: "Get started",
+    },
+  ];
+  var PERK_SEEN_KEY = "fitness_v2_perk_intro_seen";
+  var perkStep = 0;
+
+  function perkIntroSeen() {
+    try { return localStorage.getItem(PERK_SEEN_KEY) === "1"; } catch (e) { return false; }
+  }
+  function markPerkIntroSeen() {
+    try { localStorage.setItem(PERK_SEEN_KEY, "1"); } catch (e) {}
+  }
+
+  function renderPerkStep() {
+    var step = PERK_STEPS[perkStep] || PERK_STEPS[0];
+    var title = document.getElementById("perk-step-title");
+    var body = document.getElementById("perk-step-body");
+    var next = document.getElementById("perk-next");
+    if (title) title.textContent = step.title;
+    if (body) body.textContent = step.body;
+    if (next) next.textContent = step.next;
+    Array.prototype.forEach.call(document.querySelectorAll(".perk-progress-seg"), function (seg, i) {
+      seg.classList.toggle("is-active", i <= perkStep);
+      seg.classList.toggle("is-current", i === perkStep);
+    });
+  }
+
+  function showPerkIntro(show) {
+    var card = document.getElementById("member-perks-card");
+    var content = document.getElementById("passes-content");
+    if (!card) return;
+    card.hidden = !show;
+    if (content) content.classList.toggle("is-dimmed", !!show);
+    if (show) {
+      perkStep = 0;
+      renderPerkStep();
+    }
+  }
+
+  function dismissPerkIntro(goDiscover) {
+    markPerkIntroSeen();
+    showPerkIntro(false);
+    if (goDiscover) setView("discover");
   }
 
   function setFilter(value) {
@@ -962,6 +1035,9 @@
     var mmList = document.getElementById("mm-list");
     var mmEmpty = document.getElementById("mm-empty");
     var gymCount = document.getElementById("gym-count");
+    // Member Perks intro card on mobile until dismissed
+    var isWide = window.matchMedia("(min-width: 960px)").matches;
+    showPerkIntro(!isWide && !perkIntroSeen());
     mmEmpty.hidden = passes.length !== 0;
     gymCount.textContent = String(passes.length);
     mmList.innerHTML = "";
@@ -1203,6 +1279,24 @@
 
   var chip = document.getElementById("building-chip");
   if (chip) chip.textContent = BUILDING.name;
+
+  var perkNext = document.getElementById("perk-next");
+  var perkSkip = document.getElementById("perk-skip");
+  if (perkNext) {
+    perkNext.addEventListener("click", function () {
+      if (perkStep >= PERK_STEPS.length - 1) {
+        dismissPerkIntro(true);
+        return;
+      }
+      perkStep += 1;
+      renderPerkStep();
+    });
+  }
+  if (perkSkip) {
+    perkSkip.addEventListener("click", function () {
+      dismissPerkIntro(false);
+    });
+  }
 
   buildEvents();
   var today = startOfDay(new Date());

@@ -1398,13 +1398,63 @@ body.sheet-open .toast {
   .qr-wrap canvas, .qr-fallback { width: 156px !important; height: 156px !important; }
 }
 
+/* ---------- Member Perks intro card (app) ---------- */
+.member-perks-card {
+  display: none;
+}
+.member-perks-card[hidden] { display: none !important; }
+.perk-progress {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 22px;
+}
+.perk-progress-seg {
+  height: 4px;
+  border-radius: 999px;
+  background: #e4e7ef;
+}
+.perk-progress-seg.is-active { background: var(--brand); }
+.perk-step-body {
+  margin: 10px 0 0;
+  color: var(--ink-2);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.perk-step-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 28px;
+}
+.btn-outline {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  box-shadow: none;
+  min-width: 96px;
+}
+.btn-outline:hover { background: #f7f8fb; }
+.member-perks-card .member-offer-label { margin-bottom: 8px; }
+.member-perks-card h2 {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -.025em;
+  line-height: 1.2;
+  color: var(--ink);
+}
+
 /* ---------- In-app / webview polish (phone) ---------- */
 @media (max-width: 959px) {
+  body.embed {
+    background: #eceef3;
+  }
   body.embed .topbar {
     padding-top: var(--safe-top);
-    background: rgba(255,255,255,.92);
-    backdrop-filter: saturate(1.2) blur(16px);
-    -webkit-backdrop-filter: saturate(1.2) blur(16px);
+    background: #fff;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-bottom: 1px solid #e6e8ef;
   }
   body.embed .topbar-inner { padding: 10px 0 12px; }
   body.embed .building-chip { font-size: 10.5px; letter-spacing: .1em; }
@@ -1412,11 +1462,57 @@ body.sheet-open .toast {
     font-size: 20px;
     letter-spacing: -.025em;
   }
+  body.embed.app-membership .building-chip { display: none; }
+  body.embed.app-membership .topbar-head {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  body.embed.app-membership .mobile-title {
+    text-align: center;
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    color: #3a4154;
+    padding: 4px 0 2px;
+  }
+  body.embed.app-membership .tabs {
+    margin-top: 10px;
+  }
   body.embed .tabs {
     margin-top: 10px;
     padding: 3px;
     border-radius: 14px;
-    background: #ebedf3;
+    background: #e4e7ef;
+  }
+  body.embed .member-perks-card {
+    display: block;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 8px 28px rgba(20, 25, 40, .08);
+    border: 1px solid rgba(230, 232, 239, .9);
+    padding: 22px 20px 18px;
+    margin: 4px 0 16px;
+  }
+  body.embed .passes-view .mobile-only-heading { display: none; }
+  body.embed .passes-view .app-panel {
+    background: #fff;
+    border: 1px solid rgba(230, 232, 239, .9);
+    border-radius: 16px;
+    box-shadow: 0 4px 16px rgba(20, 25, 40, .05);
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  body.embed #passes-content.is-dimmed {
+    opacity: .55;
+    pointer-events: none;
+  }
+  body.embed .featured-card,
+  body.embed .discover-card,
+  body.embed .teaser-card,
+  body.embed .calendar-panel,
+  body.embed .event-panel {
+    box-shadow: 0 4px 16px rgba(20, 25, 40, .05);
   }
   body.embed .tab {
     min-height: 40px;
@@ -1704,6 +1800,8 @@ body.sheet-open .toast {
   .teaser-list {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+  .member-perks-card { display: none !important; }
+  .desktop-passes-heading { display: block !important; }
   .passes-layout {
     display: grid;
     grid-template-columns: 1fr 1fr;

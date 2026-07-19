@@ -165,16 +165,33 @@
         </div>
       </section>
 
-      <!-- My Passes -->
+      <!-- My Passes / Membership -->
       <section class="passes-view only-passes" id="passesView">
-        <div class="view-heading mobile-only-heading">
+        <div class="view-heading mobile-only-heading desktop-passes-heading">
           <span class="section-label">MEMBERSHIP</span>
           <h2>My passes &amp; perks</h2>
           <p class="section-sub">Your gym access cards and event RSVPs — tap a pass to show the QR.</p>
         </div>
 
-        <div class="passes-layout">
-          <div class="passes-block">
+        <!-- App-style Member Perks intro (mobile) -->
+        <div class="member-perks-card" id="member-perks-card">
+          <div class="perk-progress" aria-hidden="true">
+            <span class="perk-progress-seg is-active" data-perk-step="0"></span>
+            <span class="perk-progress-seg" data-perk-step="1"></span>
+            <span class="perk-progress-seg" data-perk-step="2"></span>
+            <span class="perk-progress-seg" data-perk-step="3"></span>
+          </div>
+          <p class="member-offer-label">MEMBER PERKS</p>
+          <h2 id="perk-step-title">Welcome to Member Perks</h2>
+          <p class="perk-step-body" id="perk-step-body">A curated set of building-only fitness offers, gym access passes, and wellness benefits for the 125 Park Avenue community.</p>
+          <div class="perk-step-actions">
+            <button class="btn btn-outline" type="button" id="perk-skip">Not now</button>
+            <button class="btn btn-primary" type="button" id="perk-next">Next</button>
+          </div>
+        </div>
+
+        <div class="passes-layout" id="passes-content">
+          <div class="passes-block app-panel">
             <div class="passes-block-head">
               <h3>Gym memberships</h3>
               <span class="count-pill" id="gym-count">0</span>
@@ -186,7 +203,7 @@
             </div>
           </div>
 
-          <div class="passes-block">
+          <div class="passes-block app-panel">
             <div class="passes-block-head">
               <h3>My events</h3>
               <span class="count-pill" id="rsvp-count">0</span>
