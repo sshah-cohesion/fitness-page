@@ -16,7 +16,7 @@
     calMonth: null,
     selectedDate: null,
     events: [],
-    sheet: null,
+    detail: null,
   };
 
   var grid = document.getElementById("grid");
@@ -25,6 +25,8 @@
   var searchInput = document.getElementById("search");
   var sheet = document.getElementById("sheet");
   var sheetBody = document.getElementById("sheet-body");
+  var detailPage = document.getElementById("detail-page");
+  var detailBody = document.getElementById("detail-body");
   var toastEl = document.getElementById("toast");
   var toastTimer = null;
 
@@ -94,9 +96,11 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
   }
-
+  function chevronSvg() {
+    return '<svg class="row-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
   function starSvg() {
-    return '<svg class="star" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.3l6.5-.9L12 2.5z"/></svg>';
+    return '<svg class="star" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.8 6.2 20.9l1.1-6.5L2.6 9.3l6.5-.9L12 2.5z"/></svg>';
   }
 
   function applyFallback(img) {
@@ -125,15 +129,8 @@
     }).join("").toUpperCase();
   }
 
-  // Fresh QR payload every time — timestamp + random so codes never repeat
   function passCode(gymId) {
-    return [
-      "COH",
-      BUILDING.short.replace(/\s+/g, ""),
-      gymId,
-      Date.now().toString(36).toUpperCase(),
-      randomToken(8),
-    ].join("|");
+    return ["COH", BUILDING.short.replace(/\s+/g, ""), gymId, Date.now().toString(36).toUpperCase(), randomToken(8)].join("|");
   }
 
   function makeMemberId(gymId) {
@@ -180,7 +177,6 @@
     writePasses(all);
     return all[idx];
   }
-  // Rotate QR each time the pass is shown (member ID stays stable)
   function rotatePassQr(passId) {
     return updatePass(passId, {
       code: passCode(passId),
@@ -193,7 +189,6 @@
   function getPass(id) {
     return getPasses().find(function (x) { return x.id === id; });
   }
-
   function getRsvps() {
     try { return JSON.parse(localStorage.getItem(RSVP_KEY)) || []; }
     catch (e) { return []; }
@@ -215,7 +210,6 @@
     setRsvps(getRsvps().filter(function (id) { return id !== eventId; }));
   }
 
-  // ---------- Events data ----------
   function buildEvents() {
     var today = startOfDay(new Date());
     state.events = EVENT_TEMPLATES.map(function (t) {
@@ -242,23 +236,39 @@
     return state.events.find(function (e) { return e.id === id; });
   }
 
-  // ---------- Sheet (no history stack) ----------
+  // ---------- Sheet (QR only, no history) ----------
   function openSheet(html, opts) {
     sheetBody.innerHTML = html;
+    var card = sheet.querySelector(".sheet-card");
+    if (card) {
+      card.classList.toggle("is-membership", !!(opts && opts.membership));
+      card.classList.remove("is-visible");
+    }
     sheet.hidden = false;
     document.body.classList.add("sheet-open");
-    state.sheet = (opts && opts.kind) || "generic";
+    // Native-feeling slide-up on next frame
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        if (card) card.classList.add("is-visible");
+        sheet.classList.add("is-open");
+      });
+    });
     if (opts && opts.afterRender) opts.afterRender(sheetBody);
   }
   function closeSheet() {
-    sheet.hidden = true;
-    sheetBody.innerHTML = "";
+    var card = sheet.querySelector(".sheet-card");
+    sheet.classList.remove("is-open");
+    if (card) card.classList.remove("is-visible");
     document.body.classList.remove("sheet-open");
-    state.sheet = null;
+    setTimeout(function () {
+      sheet.hidden = true;
+      sheetBody.innerHTML = "";
+      if (card) card.classList.remove("is-membership");
+    }, 220);
   }
 
   function renderQrCanvas(container, payload) {
-    var canvas = container.querySelector("canvas");
+    var canvas = container && container.querySelector("canvas");
     if (!canvas || typeof QRCode === "undefined") {
       if (container) {
         container.innerHTML =
@@ -267,49 +277,12 @@
       }
       return;
     }
+    var size = window.matchMedia("(max-height: 760px)").matches ? 148 : 176;
     QRCode.toCanvas(canvas, payload, {
-      width: 200,
+      width: size,
       margin: 1,
       color: { dark: "#1c2230", light: "#ffffff" },
     }, function () {});
-  }
-
-  // ---------- Signup / QR ----------
-  function openSignupSheet(gym) {
-    var existing = getPass(gym.id);
-    if (existing) {
-      openPassSheet(existing);
-      return;
-    }
-    openSheet(
-      '<div class="sheet-hero">' +
-        '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="" />' +
-        '<div class="sheet-hero-overlay">' +
-          '<span class="pill pill-free">Free for tenants</span>' +
-          '<h2 id="sheet-title">' + escapeHtml(gym.name) + "</h2>" +
-          "<p>" + escapeHtml(gym.location) + " · " + escapeHtml(gym.hours) + "</p>" +
-        "</div>" +
-      "</div>" +
-      '<div class="sheet-pad">' +
-        '<p class="modal-tagline">' + escapeHtml(gym.tagline) + "</p>" +
-        '<ul class="perk-list">' +
-          (gym.perks || []).map(function (p) {
-            return "<li><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M5 12.5 10 17.5 19 7\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>" +
-              escapeHtml(p) + "</li>";
-          }).join("") +
-        "</ul>" +
-        '<div class="signup-summary">' +
-          "<div><strong>Tenant access pass</strong><span>Complimentary · QR code after signup</span></div>" +
-          '<span class="free-badge">Free</span>' +
-        "</div>" +
-        '<button class="btn btn-primary btn-block" type="button" data-confirm-signup="' + gym.id + '">Sign up free</button>' +
-        '<p class="fineprint">Linked to your building profile. Manage anytime from My Passes.</p>' +
-      "</div>",
-      {
-        kind: "signup",
-        afterRender: function (root) { wireFallback(root.querySelector("img")); },
-      }
-    );
   }
 
   function confirmSignup(gymId) {
@@ -327,14 +300,16 @@
       date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
     };
     savePass(entry);
-    toast("You're in — QR pass ready");
     openPassSheet(entry, { justJoined: true });
     renderBuildingGyms();
+    renderFeatured();
+    if (state.detail && state.detail.kind === "gym" && state.detail.id === gymId) {
+      openDetail({ kind: "gym", id: gymId });
+    }
     if (state.view === "passes") renderPasses();
   }
 
   function openPassSheet(pass, opts) {
-    // New QR every open (prevents screenshot reuse); member ID stays the same
     var fresh = rotatePassQr(pass.id) || pass;
     if (!fresh.code || fresh === pass) {
       fresh = Object.assign({}, pass, {
@@ -344,25 +319,48 @@
       if (getPass(pass.id)) updatePass(pass.id, { code: fresh.code, codeUpdatedAt: fresh.codeUpdatedAt });
     }
     openSheet(
-      '<div class="pass-sheet">' +
-        (opts && opts.justJoined ? '<p class="pass-banner">You\'re signed up</p>' : "") +
-        '<h2 id="sheet-title">' + escapeHtml(fresh.name) + "</h2>" +
-        '<p class="pass-sub">Show this QR at the door for access</p>' +
-        '<div class="qr-wrap" id="qr-wrap"><canvas></canvas></div>' +
-        '<p class="qr-rotate-note">One-time code · refreshes each time you open this pass</p>' +
-        '<div class="pass-meta">' +
-          "<div><span>Member ID</span><strong>" + escapeHtml(fresh.memberId) + "</strong></div>" +
-          "<div><span>Location</span><strong>" + escapeHtml(fresh.location) + "</strong></div>" +
-          "<div><span>Building</span><strong>" + escapeHtml(BUILDING.name) + "</strong></div>" +
-          "<div><span>Status</span><strong class=\"ok\">Active</strong></div>" +
+      '<div class="pass-sheet membership-pass">' +
+        '<div class="membership-scroll">' +
+          '<div class="membership-hero">' +
+            '<div class="membership-hero-bg" aria-hidden="true"></div>' +
+            '<p class="membership-kicker">MEMBERSHIP PROGRAM</p>' +
+            '<h2 id="sheet-title">' + escapeHtml(fresh.name) + "</h2>" +
+            '<p class="membership-tier">' +
+              (opts && opts.justJoined ? "Welcome · " : "") +
+              "Tenant Access Member" +
+            "</p>" +
+          "</div>" +
+          '<div class="membership-body">' +
+            '<p class="pass-sub">Show this QR at the door for access</p>' +
+            '<div class="qr-wrap" id="qr-wrap"><canvas></canvas></div>' +
+            '<p class="qr-rotate-note">One-time code · refreshes each time you open this pass</p>' +
+            '<div class="membership-panel">' +
+              '<div class="membership-panel-top">' +
+                "<div>" +
+                  '<span class="membership-panel-label">Your access</span>' +
+                  '<strong class="membership-panel-value">' + escapeHtml(fresh.memberId) + "</strong>" +
+                "</div>" +
+                '<span class="active-tier-badge">ACTIVE PASS</span>' +
+              "</div>" +
+              '<div class="membership-panel-grid">' +
+                "<div><span>Location</span><strong>" + escapeHtml(fresh.location) + "</strong></div>" +
+                "<div><span>Building</span><strong>" + escapeHtml(BUILDING.name) + "</strong></div>" +
+              "</div>" +
+            "</div>" +
+          "</div>" +
         "</div>" +
-        '<button class="btn btn-primary btn-block" type="button" data-goto="passes">View in My Passes</button>' +
-        '<button class="btn btn-ghost btn-block" type="button" data-save-pass-card="' + escapeHtml(fresh.id) + '">Save pass card</button>' +
-        '<button class="btn btn-ghost btn-block" type="button" data-sheet-close>Done</button>' +
-        '<p class="fineprint">Your pass is saved in My Passes. QR refreshes every time you open it.</p>' +
+        '<div class="membership-actions">' +
+          '<button class="btn btn-primary btn-block" type="button" data-goto="passes">View in My Passes</button>' +
+          '<div class="membership-actions-row">' +
+            '<button class="btn btn-membership btn-block" type="button" data-save-pass-card="' +
+              escapeHtml(fresh.id) +
+              '">Save card</button>' +
+            '<button class="btn btn-ghost btn-block" type="button" data-sheet-close>Done</button>' +
+          "</div>" +
+        "</div>" +
       "</div>",
       {
-        kind: "pass",
+        membership: true,
         afterRender: function (root) {
           renderQrCanvas(root.querySelector("#qr-wrap"), fresh.code);
         },
@@ -370,32 +368,160 @@
     );
   }
 
-  function openEventSheet(ev) {
-    var going = hasRsvp(ev.id);
-    openSheet(
-      '<div class="event-sheet">' +
-        '<span class="type-pill type-' + ev.type + '">' + (TYPE_LABELS[ev.type] || ev.type) + "</span>" +
-        '<h2 id="sheet-title">' + escapeHtml(ev.title) + "</h2>" +
-        '<p class="event-modal-desc">' + escapeHtml(ev.description) + "</p>" +
-        '<dl class="event-meta">' +
-          "<div><dt>When</dt><dd>" + escapeHtml(formatLongDate(ev.date) + " · " + ev.time) + "</dd></div>" +
-          "<div><dt>Where</dt><dd>" + escapeHtml(ev.place) + "</dd></div>" +
-          "<div><dt>Spots</dt><dd>" + ev.spots + " tenant spots</dd></div>" +
-        "</dl>" +
-        (going
-          ? '<div class="rsvp-confirmed"><strong>You\'re going</strong><span>Saved in My Passes</span></div>' +
-            '<button class="btn btn-ghost btn-block" type="button" data-calendar-event="' + escapeHtml(ev.id) + '">Add to Calendar</button>' +
-            '<button class="btn btn-primary btn-block" type="button" data-goto="passes">View My Passes</button>' +
-            '<button class="btn btn-ghost btn-block" type="button" data-cancel-rsvp="' + ev.id + '">Cancel RSVP</button>'
-          : '<button class="btn btn-primary btn-block" type="button" data-confirm-rsvp="' + ev.id + '">RSVP free</button>') +
-        '<p class="fineprint">Free for building tenants. Reminder morning-of.</p>' +
-      "</div>",
-      { kind: "event" }
-    );
+  // ---------- Detail page (in-app, no browser history) ----------
+  function closeDetail() {
+    var wasOpen = !detailPage.hidden;
+    state.detail = null;
+    detailPage.classList.remove("is-visible");
+    document.body.classList.remove("detail-open");
+    function finish() {
+      detailPage.hidden = true;
+      detailBody.innerHTML = "";
+      document.getElementById("app-shell").hidden = false;
+    }
+    if (!wasOpen) {
+      finish();
+      return;
+    }
+    setTimeout(finish, 200);
   }
 
+  function openDetail(detail) {
+    state.detail = detail;
+    document.getElementById("app-shell").hidden = true;
+    detailPage.hidden = false;
+    detailPage.classList.remove("is-visible");
+    document.body.classList.add("detail-open");
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        detailPage.classList.add("is-visible");
+      });
+    });
+    window.scrollTo(0, 0);
+
+    if (detail.kind === "gym") {
+      var gym = BUILDING_GYMS.find(function (g) { return g.id === detail.id; });
+      if (!gym) { closeDetail(); return; }
+      renderGymDetail(gym);
+    } else if (detail.kind === "studio") {
+      var studio = GYMS.find(function (g) { return g.id === detail.id; });
+      if (!studio) { closeDetail(); return; }
+      renderStudioDetail(studio);
+    } else if (detail.kind === "event") {
+      var ev = findEvent(detail.id);
+      if (!ev) { closeDetail(); return; }
+      renderEventDetail(ev);
+    }
+  }
+
+  function renderGymDetail(gym) {
+    var signed = isSignedUp(gym.id);
+    document.getElementById("detail-nav-title").textContent = "Gym";
+    detailBody.innerHTML =
+      '<div class="detail-main">' +
+        '<div class="detail-hero">' +
+          '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="' + escapeHtml(gym.name) + '" />' +
+          '<div class="detail-hero-badges">' +
+            '<span class="pill ' + (signed ? "pill-new" : "pill-free") + '">' + (signed ? "Your pass" : "Free signup") + "</span>" +
+          "</div>" +
+        "</div>" +
+        '<div class="detail-content">' +
+          '<span class="detail-cat">' + escapeHtml(gym.category) + "</span>" +
+          "<h2>" + escapeHtml(gym.name) + "</h2>" +
+          '<a class="addr" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener">' + escapeHtml(shortAddr(gym.address) || gym.location) + "</a>" +
+          '<p class="detail-dist">' + escapeHtml(gym.distance) + " · " + escapeHtml(gym.hours) + "</p>" +
+          '<div class="detail-divider"></div>' +
+          '<span class="member-offer-label">MEMBERSHIP PROGRAM</span>' +
+          "<h3>Member perks · free tenant signup</h3>" +
+          '<p class="detail-desc">' + escapeHtml(gym.tagline) + "</p>" +
+          (signed
+            ? '<div class="membership-panel detail-membership-panel">' +
+                '<div class="membership-panel-top">' +
+                  "<div><span class=\"membership-panel-label\">Your access</span>" +
+                  '<strong class="membership-panel-value">Tenant Access</strong></div>' +
+                  '<span class="active-tier-badge">ACTIVE PASS</span>' +
+                "</div>" +
+              "</div>"
+            : "") +
+          '<ul class="perk-list">' +
+            (gym.perks || []).map(function (p) {
+              return "<li><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\"><path d=\"M5 12.5 10 17.5 19 7\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>" +
+                escapeHtml(p) + "</li>";
+            }).join("") +
+          "</ul>" +
+        "</div>" +
+      "</div>" +
+      '<div class="detail-sticky">' +
+        (signed
+          ? '<button class="btn btn-primary btn-block" type="button" data-show-pass="' + gym.id + '">Show membership QR</button>'
+          : '<button class="btn btn-primary btn-block" type="button" data-confirm-signup="' + gym.id + '">Join free · get QR pass</button>') +
+        '<a class="btn btn-ghost btn-block" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener">Get directions</a>' +
+      "</div>";
+    wireFallback(detailBody.querySelector("img"));
+  }
+
+  function renderStudioDetail(studio) {
+    document.getElementById("detail-nav-title").textContent = "Studio";
+    detailBody.innerHTML =
+      '<div class="detail-main">' +
+        '<div class="detail-hero">' +
+          '<img data-fallback="' + studio.fallback + '" src="' + studio.img + '" alt="' + escapeHtml(studio.name) + '" />' +
+          '<div class="detail-hero-badges">' + (studio.badges || []).map(badgePill).join("") + "</div>" +
+        "</div>" +
+        '<div class="detail-content">' +
+          '<span class="detail-cat">' + escapeHtml(studio.category) + "</span>" +
+          "<h2>" + escapeHtml(studio.name) + "</h2>" +
+          '<div class="detail-rating">' + starSvg() + " " + studio.rating.toFixed(1) +
+            ' <span>(' + studio.reviews + " reviews)</span></div>" +
+          '<a class="addr" href="' + mapUrl(studio.address) + '" target="_blank" rel="noopener">' + escapeHtml(shortAddr(studio.address)) + "</a>" +
+          '<p class="detail-dist">' + escapeHtml(studio.distance) + "</p>" +
+          '<div class="detail-divider"></div>' +
+          '<span class="member-offer-label">NEARBY PARTNER</span>' +
+          "<h3>Studio details</h3>" +
+          '<p class="detail-desc">' + escapeHtml(studio.tagline) + "</p>" +
+        "</div>" +
+      "</div>" +
+      '<div class="detail-sticky">' +
+        '<a class="btn btn-primary btn-block" href="' + mapUrl(studio.address) + '" target="_blank" rel="noopener">Get directions</a>' +
+      "</div>";
+    wireFallback(detailBody.querySelector("img"));
+  }
+
+  function renderEventDetail(ev) {
+    var going = hasRsvp(ev.id);
+    document.getElementById("detail-nav-title").textContent = "Event";
+    detailBody.innerHTML =
+      '<div class="detail-main">' +
+        '<div class="detail-hero detail-hero-event type-' + ev.type + '">' +
+          '<div class="detail-hero-event-inner">' +
+            '<span class="type-pill type-' + ev.type + '">' + (TYPE_LABELS[ev.type] || ev.type) + "</span>" +
+            "<h2>" + escapeHtml(ev.title) + "</h2>" +
+            "<p>" + escapeHtml(formatLongDate(ev.date)) + "</p>" +
+          "</div>" +
+        "</div>" +
+        '<div class="detail-content">' +
+          '<dl class="event-meta">' +
+            "<div><dt>When</dt><dd>" + escapeHtml(ev.time) + "</dd></div>" +
+            "<div><dt>Where</dt><dd>" + escapeHtml(ev.place) + "</dd></div>" +
+            "<div><dt>Spots</dt><dd>" + ev.spots + " tenant spots</dd></div>" +
+          "</dl>" +
+          '<p class="detail-desc">' + escapeHtml(ev.description) + "</p>" +
+          (going ? '<div class="rsvp-confirmed"><strong>You\'re going</strong><span>Saved in My Passes</span></div>' : "") +
+        "</div>" +
+      "</div>" +
+      '<div class="detail-sticky">' +
+        (going
+          ? '<button class="btn btn-primary btn-block" type="button" data-goto="passes">View My Passes</button>' +
+            '<div class="membership-actions-row">' +
+              '<button class="btn btn-ghost btn-block" type="button" data-calendar-event="' + escapeHtml(ev.id) + '">Calendar</button>' +
+              '<button class="btn btn-ghost btn-block" type="button" data-cancel-rsvp="' + ev.id + '">Cancel</button>' +
+            "</div>"
+          : '<button class="btn btn-primary btn-block" type="button" data-confirm-rsvp="' + ev.id + '">RSVP free</button>') +
+      "</div>";
+  }
+
+  // ---------- Calendar helpers ----------
   function parseEventTimeRange(ev) {
-    // "6:30 AM – 7:30 AM"
     var parts = String(ev.time || "").split("–").map(function (s) { return s.trim(); });
     function toDate(part) {
       var m = part.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -424,10 +550,7 @@
   function downloadCalendarEvent(ev) {
     var range = parseEventTimeRange(ev);
     var ics = [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "PRODID:-//125 Park Avenue//Fitness//EN",
-      "BEGIN:VEVENT",
+      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//125 Park Avenue//Fitness//EN", "BEGIN:VEVENT",
       "UID:" + ev.id + "@fitness.parkave",
       "DTSTAMP:" + toIcsDate(new Date()),
       "DTSTART:" + toIcsDate(range.start),
@@ -435,8 +558,7 @@
       "SUMMARY:" + ev.title.replace(/,/g, "\\,"),
       "LOCATION:" + (ev.place + ", " + BUILDING.address).replace(/,/g, "\\,"),
       "DESCRIPTION:" + String(ev.description || "").replace(/,/g, "\\,"),
-      "END:VEVENT",
-      "END:VCALENDAR",
+      "END:VEVENT", "END:VCALENDAR",
     ].join("\r\n");
     var blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
     var url = URL.createObjectURL(blob);
@@ -453,41 +575,70 @@
   function savePassCardImage(pass) {
     var canvas = document.createElement("canvas");
     canvas.width = 720;
-    canvas.height = 980;
+    canvas.height = 1100;
     var ctx = canvas.getContext("2d");
-    var grad = ctx.createLinearGradient(0, 0, 720, 980);
-    grad.addColorStop(0, "#4c5bd4");
-    grad.addColorStop(1, "#7a5cff");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 720, 980);
-
-    ctx.fillStyle = "rgba(255,255,255,0.16)";
-    roundRect(ctx, 40, 40, 640, 900, 36);
+    ctx.fillStyle = "#ffffff";
+    roundRect(ctx, 0, 0, 720, 1100, 40);
     ctx.fill();
 
+    var grad = ctx.createLinearGradient(0, 0, 720, 320);
+    grad.addColorStop(0, "#3d4db8");
+    grad.addColorStop(0.55, "#5b6be0");
+    grad.addColorStop(1, "#7b8cff");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 720, 320);
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.beginPath();
+    ctx.arc(560, 40, 180, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(80, 260, 120, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(255,255,255,0.78)";
+    ctx.font = "700 18px Inter, sans-serif";
+    ctx.letterSpacing = "2px";
+    ctx.fillText("MEMBERSHIP PROGRAM", 48, 70);
     ctx.fillStyle = "#fff";
-    ctx.font = "700 22px Inter, sans-serif";
-    ctx.fillText("125 PARK AVENUE", 80, 120);
-    ctx.font = "800 40px Inter, sans-serif";
-    wrapText(ctx, pass.name, 80, 180, 560, 48);
-    ctx.font = "500 22px Inter, sans-serif";
-    ctx.fillStyle = "rgba(255,255,255,0.85)";
-    ctx.fillText(pass.location, 80, 280);
-    ctx.fillText("Member ID  " + pass.memberId, 80, 320);
+    ctx.font = "800 36px Inter, sans-serif";
+    wrapText(ctx, pass.name, 48, 130, 620, 42);
+    ctx.font = "600 20px Inter, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.fillText("Tenant Access Member", 48, 250);
+
+    ctx.fillStyle = "#4a5163";
+    ctx.font = "500 18px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Show this QR at the door for access", 360, 380);
 
     var qrCanvas = document.querySelector("#qr-wrap canvas");
     if (qrCanvas && qrCanvas.width) {
       ctx.fillStyle = "#fff";
-      roundRect(ctx, 180, 380, 360, 360, 24);
+      ctx.strokeStyle = "#e8eaf0";
+      ctx.lineWidth = 2;
+      roundRect(ctx, 170, 410, 380, 380, 28);
       ctx.fill();
-      ctx.drawImage(qrCanvas, 200, 400, 320, 320);
+      ctx.stroke();
+      ctx.drawImage(qrCanvas, 195, 435, 330, 330);
     }
 
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.font = "600 20px Inter, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("Show this QR at the door · Active pass", 360, 820);
+    ctx.fillStyle = "#eef0fb";
+    roundRect(ctx, 48, 830, 624, 200, 24);
+    ctx.fill();
     ctx.textAlign = "left";
+    ctx.fillStyle = "#8b91a3";
+    ctx.font = "700 14px Inter, sans-serif";
+    ctx.fillText("YOUR ACCESS", 72, 870);
+    ctx.fillStyle = "#1c2230";
+    ctx.font = "800 28px Inter, sans-serif";
+    ctx.fillText(pass.memberId || "", 72, 910);
+    ctx.fillStyle = "#17915a";
+    ctx.font = "800 14px Inter, sans-serif";
+    ctx.fillText("ACTIVE PASS", 480, 870);
+    ctx.fillStyle = "#4a5163";
+    ctx.font = "500 16px Inter, sans-serif";
+    ctx.fillText(pass.location || "", 72, 960);
+    ctx.fillText(BUILDING.name || "125 Park Avenue", 72, 990);
 
     canvas.toBlob(function (blob) {
       if (!blob) return;
@@ -512,7 +663,6 @@
     ctx.arcTo(x, y, x + w, y, r);
     ctx.closePath();
   }
-
   function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     var words = String(text).split(" ");
     var line = "";
@@ -523,14 +673,12 @@
         ctx.fillText(line, x, yy);
         line = words[n] + " ";
         yy += lineHeight;
-      } else {
-        line = test;
-      }
+      } else line = test;
     }
     ctx.fillText(line, x, yy);
   }
 
-  // ---------- Rendering ----------
+  // ---------- Discover-style rendering ----------
   function matches(gym) {
     var f = state.filter;
     var okFilter = f === "all" || (gym.tags || []).indexOf(f) !== -1;
@@ -542,32 +690,81 @@
     return okFilter && okQuery;
   }
 
+  function renderFeatured() {
+    var wrap = document.getElementById("featured-wrap");
+    if (!wrap) return;
+    var gym = BUILDING_GYMS[0];
+    if (!gym) { wrap.innerHTML = ""; return; }
+    var signed = isSignedUp(gym.id);
+    wrap.innerHTML =
+      '<article class="featured-card" data-detail-gym="' + gym.id + '">' +
+        '<div class="featured-media">' +
+          '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="' + escapeHtml(gym.name) + '" />' +
+        "</div>" +
+        '<div class="featured-body">' +
+          '<span class="pill ' + (signed ? "pill-new" : "pill-free") + '">' + (signed ? "Your pass" : "New offer") + "</span>" +
+          "<h2>" + escapeHtml(gym.name) + "</h2>" +
+          '<div class="featured-loc">' +
+            '<a class="addr" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' +
+              escapeHtml(shortAddr(gym.address) || gym.location) +
+            "</a>" +
+            '<span class="featured-dist">' + escapeHtml(gym.distance) + "</span>" +
+          "</div>" +
+          '<div class="detail-divider"></div>' +
+          '<span class="member-offer-label">MEMBER OFFER</span>' +
+          "<h3>Free tenant signup · QR access pass</h3>" +
+          "<p>" + escapeHtml(gym.tagline) + "</p>" +
+          '<button class="btn btn-primary" type="button" data-detail-gym="' + gym.id + '">View offer</button>' +
+        "</div>" +
+      "</article>";
+    wireFallback(wrap.querySelector("img"));
+  }
+
+  function discoverCardHtml(opts) {
+    return (
+      '<div class="discover-card-media">' +
+        '<img data-fallback="' + opts.fallback + '" src="' + opts.img + '" alt=""' + (opts.lazy ? ' loading="lazy"' : "") + " />" +
+        '<div class="discover-card-tags">' + (opts.tagsHtml || "") + "</div>" +
+      "</div>" +
+      '<div class="discover-card-body">' +
+        "<h3>" + escapeHtml(opts.name) + "</h3>" +
+        '<span class="row-cat">' + escapeHtml(opts.category) + "</span>" +
+        '<a class="addr" href="' + mapUrl(opts.address) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' +
+          escapeHtml(opts.addressLabel) +
+        "</a>" +
+        '<span class="row-meta">' + opts.metaHtml + "</span>" +
+        (opts.desc ? '<p class="row-desc mobile-row-desc">' + escapeHtml(opts.desc) + "</p>" : "") +
+        '<span class="view-details-link">View details</span>' +
+      "</div>" +
+      '<span class="row-chevron mobile-chevron" aria-hidden="true">' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      "</span>"
+    );
+  }
+
   function renderBuildingGyms() {
     var wrap = document.getElementById("building-grid");
     if (!wrap) return;
     wrap.innerHTML = "";
-    BUILDING_GYMS.forEach(function (gym, i) {
+    BUILDING_GYMS.forEach(function (gym) {
       var signed = isSignedUp(gym.id);
-      var card = document.createElement("article");
-      card.className = "building-card";
-      card.style.animationDelay = (i * 60) + "ms";
-      card.innerHTML =
-        '<div class="building-media">' +
-          '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="' + escapeHtml(gym.name) + '" />' +
-          '<span class="pill pill-free">' + (signed ? "Your pass" : "Free signup") + "</span>" +
-        "</div>" +
-        '<div class="building-body">' +
-          '<span class="building-cat">' + escapeHtml(gym.category) + "</span>" +
-          "<h3>" + escapeHtml(gym.name) + "</h3>" +
-          '<p class="building-tagline">' + escapeHtml(gym.tagline) + "</p>" +
-          '<ul class="building-meta"><li>' + escapeHtml(gym.location) + "</li><li>" + escapeHtml(gym.hours) + "</li></ul>" +
-          '<div class="building-actions">' +
-            (signed
-              ? '<button class="btn btn-primary" type="button" data-show-pass="' + gym.id + '">Show QR pass</button>'
-              : '<button class="btn btn-primary" type="button" data-signup="' + gym.id + '">Sign up free</button>') +
-            (signed ? '<span class="signed-chip">Active</span>' : "") +
-          "</div>" +
-        "</div>";
+      var card = document.createElement("button");
+      card.type = "button";
+      card.className = "discover-card";
+      card.setAttribute("data-detail-gym", gym.id);
+      card.innerHTML = discoverCardHtml({
+        img: gym.img,
+        fallback: gym.fallback,
+        name: gym.name,
+        category: gym.category,
+        address: gym.address,
+        addressLabel: gym.location,
+        desc: gym.tagline,
+        tagsHtml: '<span class="pill ' + (signed ? "pill-new" : "pill-free") + '">' +
+          (signed ? "Your pass" : "Free signup") + "</span>" +
+          '<span class="pill pill-soft">Membership Perks</span>',
+        metaHtml: escapeHtml(gym.hours),
+      });
       wrap.appendChild(card);
       wireFallback(card.querySelector("img"));
     });
@@ -579,12 +776,11 @@
     var today = startOfDay(new Date());
     var upcoming = state.events.filter(function (e) { return e.date >= today; }).slice(0, 4);
     list.innerHTML = "";
-    upcoming.forEach(function (ev, i) {
+    upcoming.forEach(function (ev) {
       var el = document.createElement("button");
       el.type = "button";
       el.className = "teaser-card";
-      el.style.animationDelay = (i * 50) + "ms";
-      el.setAttribute("data-event", ev.id);
+      el.setAttribute("data-detail-event", ev.id);
       el.innerHTML =
         '<div class="teaser-date">' +
           '<span class="teaser-dow">' + ev.date.toLocaleDateString("en-US", { weekday: "short" }) + "</span>" +
@@ -594,41 +790,146 @@
           '<span class="type-pill type-' + ev.type + '">' + (TYPE_LABELS[ev.type] || ev.type) + "</span>" +
           "<strong>" + escapeHtml(ev.title) + "</strong>" +
           '<span class="teaser-meta">' + escapeHtml(ev.time) + (hasRsvp(ev.id) ? " · Going" : "") + "</span>" +
-        "</div>";
+        "</div>" +
+        chevronSvg();
       list.appendChild(el);
     });
   }
 
   function renderGrid() {
     var list = GYMS.filter(matches);
-    if (state.view === "discover") list = list.slice(0, 4);
+    if (state.view === "discover") list = list.slice(0, 8);
     grid.innerHTML = "";
     empty.hidden = list.length !== 0;
     list.forEach(function (gym) {
-      var card = document.createElement("article");
-      card.className = "card";
-      card.innerHTML =
-        '<div class="card-media">' +
-          '<img data-fallback="' + gym.fallback + '" src="' + gym.img + '" alt="' + escapeHtml(gym.name) + '" loading="lazy" />' +
-          '<div class="card-badges">' + (gym.badges || []).map(badgePill).join("") + "</div>" +
-          '<span class="card-rating">' + starSvg() + gym.rating.toFixed(1) + "</span>" +
-        "</div>" +
-        '<div class="card-body">' +
-          "<h4>" + escapeHtml(gym.name) + "</h4>" +
-          '<span class="card-cat">' + escapeHtml(gym.category) + "</span>" +
-          '<a class="addr" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener">' +
-            '<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 21s-7-6.3-7-11a7 7 0 1 1 14 0c0 4.7-7 11-7 11Z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="10" r="2.4" stroke="currentColor" stroke-width="2"/></svg>' +
-            '<span class="addr-txt">' + escapeHtml(shortAddr(gym.address)) + "</span>" +
-          "</a>" +
-          '<span class="card-dist">' + escapeHtml(gym.distance) + "</span>" +
-          '<div class="card-foot">' +
-            '<span class="card-blurb">' + escapeHtml(gym.tagline) + "</span>" +
-            '<a class="btn btn-ghost" href="' + mapUrl(gym.address) + '" target="_blank" rel="noopener">Directions</a>' +
-          "</div>" +
-        "</div>";
+      var card = document.createElement("button");
+      card.type = "button";
+      card.className = "discover-card";
+      card.setAttribute("data-detail-studio", gym.id);
+      var tags = (gym.badges || []).map(badgePill).join("") +
+        '<span class="pill pill-soft">' + escapeHtml(gym.category.split("&")[0].trim()) + "</span>";
+      card.innerHTML = discoverCardHtml({
+        img: gym.img,
+        fallback: gym.fallback,
+        lazy: true,
+        name: gym.name,
+        category: gym.category,
+        address: gym.address,
+        addressLabel: shortAddr(gym.address),
+        desc: gym.tagline,
+        tagsHtml: tags,
+        metaHtml: escapeHtml(gym.distance) + " · " + starSvg() + " " + gym.rating.toFixed(1),
+      });
       grid.appendChild(card);
       wireFallback(card.querySelector("img"));
     });
+  }
+
+  function syncPageHeader(view) {
+    var titles = {
+      discover: "Discover",
+      events: "Events",
+      studios: "Studios",
+      passes: "My Passes",
+    };
+    var mobileTitles = {
+      discover: "Fitness & Wellness",
+      events: "Events",
+      studios: "Studios",
+      passes: "Membership",
+    };
+    var descs = {
+      discover: "Tenant gyms, membership passes, and nearby fitness studios around 125 Park Avenue.",
+      events: "RSVP free to building fitness events — confirmed classes appear in My Passes.",
+      studios: "Local Midtown partner studios near 125 Park Avenue.",
+      passes: "Your gym access cards and event RSVPs — open a pass to show the QR.",
+    };
+    var titleEl = document.getElementById("page-title");
+    var crumb = document.getElementById("breadcrumb-view");
+    var desc = document.getElementById("page-desc");
+    var mobileTitle = document.querySelector(".mobile-title");
+    if (titleEl) titleEl.textContent = titles[view] || "Discover";
+    if (crumb) crumb.textContent = titles[view] || "Discover";
+    if (desc) desc.textContent = descs[view] || descs.discover;
+    if (mobileTitle) mobileTitle.textContent = mobileTitles[view] || "Fitness & Wellness";
+    document.body.classList.toggle("app-membership", view === "passes");
+  }
+
+  var PERK_STEPS = [
+    {
+      title: "Welcome to Member Perks",
+      body: "A curated set of building-only fitness offers, gym access passes, and wellness benefits for the 125 Park Avenue community.",
+      next: "Next",
+    },
+    {
+      title: "Free tenant gym access",
+      body: "Sign up for complimentary in-building gyms — no monthly fee for tenants. Your digital pass lives in Membership.",
+      next: "Next",
+    },
+    {
+      title: "Show your QR at the door",
+      body: "Each pass includes a one-time QR code that refreshes when you open it. Present it for entry anytime.",
+      next: "Next",
+    },
+    {
+      title: "RSVP to fitness events",
+      body: "Reserve building classes free. Confirmed RSVPs appear here next to your gym memberships.",
+      next: "Get started",
+    },
+  ];
+  var PERK_SEEN_KEY = "fitness_v2_perk_intro_seen";
+  var perkStep = 0;
+
+  function perkIntroSeen() {
+    try { return localStorage.getItem(PERK_SEEN_KEY) === "1"; } catch (e) { return false; }
+  }
+  function markPerkIntroSeen() {
+    try { localStorage.setItem(PERK_SEEN_KEY, "1"); } catch (e) {}
+  }
+
+  function renderPerkStep() {
+    var step = PERK_STEPS[perkStep] || PERK_STEPS[0];
+    var title = document.getElementById("perk-step-title");
+    var body = document.getElementById("perk-step-body");
+    var next = document.getElementById("perk-next");
+    if (title) title.textContent = step.title;
+    if (body) body.textContent = step.body;
+    if (next) next.textContent = step.next;
+    Array.prototype.forEach.call(document.querySelectorAll(".perk-progress-seg"), function (seg, i) {
+      seg.classList.toggle("is-active", i <= perkStep);
+      seg.classList.toggle("is-current", i === perkStep);
+    });
+  }
+
+  function showPerkIntro(show) {
+    var card = document.getElementById("member-perks-card");
+    var content = document.getElementById("passes-content");
+    if (!card) return;
+    card.hidden = !show;
+    if (content) {
+      content.hidden = !!show;
+      content.classList.remove("is-dimmed");
+    }
+    if (show) {
+      perkStep = 0;
+      renderPerkStep();
+    }
+  }
+
+  function dismissPerkIntro(goDiscover) {
+    markPerkIntroSeen();
+    showPerkIntro(false);
+    if (goDiscover) setView("discover");
+  }
+
+  function setFilter(value) {
+    state.filter = value || "all";
+    Array.prototype.forEach.call(document.querySelectorAll(".chip"), function (c) {
+      c.classList.toggle("is-active", c.getAttribute("data-filter") === state.filter);
+    });
+    var sel = document.getElementById("filter-select");
+    if (sel && sel.value !== state.filter) sel.value = state.filter;
+    renderGrid();
   }
 
   function renderWeekStrip() {
@@ -666,13 +967,11 @@
     var calGrid = document.getElementById("cal-grid");
     if (!label || !calGrid) return;
     label.textContent = MONTHS[month.getMonth()] + " " + month.getFullYear();
-
     var first = new Date(month.getFullYear(), month.getMonth(), 1);
     var start = new Date(first);
     start.setDate(1 - first.getDay());
     var today = startOfDay(new Date());
     calGrid.innerHTML = "";
-
     for (var i = 0; i < 42; i++) {
       var day = addDays(start, i);
       var inMonth = day.getMonth() === month.getMonth();
@@ -680,7 +979,6 @@
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "cal-day";
-      btn.setAttribute("role", "gridcell");
       if (!inMonth) btn.classList.add("is-outside");
       if (sameDay(day, today)) btn.classList.add("is-today");
       if (sameDay(day, state.selectedDate)) btn.classList.add("is-selected");
@@ -715,12 +1013,11 @@
     var items = eventsOn(day);
     list.innerHTML = "";
     emptyEl.hidden = items.length !== 0;
-    items.forEach(function (ev, i) {
+    items.forEach(function (ev) {
       var el = document.createElement("button");
       el.type = "button";
       el.className = "event-row";
-      el.style.animationDelay = (i * 40) + "ms";
-      el.setAttribute("data-event", ev.id);
+      el.setAttribute("data-detail-event", ev.id);
       el.innerHTML =
         '<span class="event-rail type-' + ev.type + '"></span>' +
         '<div class="event-row-body">' +
@@ -730,7 +1027,8 @@
           "</div>" +
           '<span class="event-row-meta">' + escapeHtml(ev.time) + "</span>" +
           '<span class="event-row-meta">' + escapeHtml(ev.place) + "</span>" +
-        "</div>";
+        "</div>" +
+        chevronSvg();
       list.appendChild(el);
     });
   }
@@ -740,92 +1038,88 @@
     var mmList = document.getElementById("mm-list");
     var mmEmpty = document.getElementById("mm-empty");
     var gymCount = document.getElementById("gym-count");
+    // Member Perks intro card on mobile until dismissed
+    var isWide = window.matchMedia("(min-width: 960px)").matches;
+    showPerkIntro(!isWide && !perkIntroSeen());
     mmEmpty.hidden = passes.length !== 0;
     gymCount.textContent = String(passes.length);
     mmList.innerHTML = "";
     passes.forEach(function (m) {
       var el = document.createElement("button");
       el.type = "button";
-      el.className = "mm-card is-button";
+      el.className = "membership-mini";
       el.setAttribute("data-show-pass", m.id);
       el.innerHTML =
-        '<img class="mm-thumb" data-fallback="' + m.fallback + '" src="' + m.img + '" alt="" />' +
-        '<div class="mm-info">' +
-          "<h4>" + escapeHtml(m.name) + "</h4>" +
-          '<div class="mm-tier">QR access pass</div>' +
-          '<div class="mm-meta">' + escapeHtml(m.location) + " · " + escapeHtml(m.memberId) + "</div>" +
-          '<span class="mm-status">Active · Tap to show QR</span>' +
+        '<div class="membership-mini-hero">' +
+          '<span class="membership-kicker">MEMBERSHIP</span>' +
+          "<strong>" + escapeHtml(m.name) + "</strong>" +
+          '<span class="membership-mini-tier">Tenant Access</span>' +
+        "</div>" +
+        '<div class="membership-mini-body">' +
+          '<div class="membership-mini-meta">' +
+            "<div><span>Member ID</span><strong>" + escapeHtml(m.memberId) + "</strong></div>" +
+            '<span class="active-tier-badge">ACTIVE</span>' +
+          "</div>" +
+          '<p class="membership-mini-cta">Tap to show QR pass</p>' +
         "</div>";
       mmList.appendChild(el);
-      wireFallback(el.querySelector("img"));
     });
 
-    var rsvpIds = getRsvps();
+    var upcoming = getRsvps().map(findEvent).filter(Boolean).sort(function (a, b) { return a.date - b.date; });
     var rsvpList = document.getElementById("rsvp-list");
     var rsvpEmpty = document.getElementById("rsvp-empty");
-    var rsvpCount = document.getElementById("rsvp-count");
-    var upcoming = rsvpIds
-      .map(findEvent)
-      .filter(Boolean)
-      .sort(function (a, b) { return a.date - b.date; });
-    rsvpCount.textContent = String(upcoming.length);
+    document.getElementById("rsvp-count").textContent = String(upcoming.length);
     rsvpEmpty.hidden = upcoming.length !== 0;
     rsvpList.innerHTML = "";
     upcoming.forEach(function (ev) {
       var el = document.createElement("button");
       el.type = "button";
-      el.className = "rsvp-card";
-      el.setAttribute("data-event", ev.id);
+      el.className = "discover-row";
+      el.setAttribute("data-detail-event", ev.id);
       el.innerHTML =
-        '<div class="rsvp-date">' +
-          '<span>' + ev.date.toLocaleDateString("en-US", { weekday: "short" }) + "</span>" +
-          "<strong>" + formatShortDate(ev.date) + "</strong>" +
+        '<div class="row-thumb row-thumb-event type-' + ev.type + '">' +
+          '<span>' + ev.date.getDate() + "</span>" +
         "</div>" +
-        '<div class="rsvp-info">' +
+        '<div class="row-body">' +
           '<span class="type-pill type-' + ev.type + '">' + (TYPE_LABELS[ev.type] || ev.type) + "</span>" +
-          "<strong>" + escapeHtml(ev.title) + "</strong>" +
-          '<span class="rsvp-meta">' + escapeHtml(ev.time) + " · " + escapeHtml(ev.place) + "</span>" +
+          "<h3>" + escapeHtml(ev.title) + "</h3>" +
+          '<p class="row-desc">' + escapeHtml(ev.time) + " · " + escapeHtml(ev.place) + "</p>" +
           '<span class="rsvp-chip">Going</span>' +
-        "</div>";
+        "</div>" +
+        chevronSvg();
       rsvpList.appendChild(el);
     });
   }
 
-  // ---------- Views: replaceState so Back leaves the custom link ----------
-  function syncUrl(view, replace) {
-    var url = location.pathname + location.search + "#" + view;
-    if (replace || location.hash.replace(/^#/, "") === view) {
-      history.replaceState({ view: view }, "", url);
-    } else {
-      // Still replace — tabs should never stack history inside the embed
-      history.replaceState({ view: view }, "", url);
-    }
+  // ---------- Views ----------
+  function syncUrl(view) {
+    history.replaceState({ view: view }, "", location.pathname + location.search + "#" + view);
   }
 
   function setView(view, opts) {
     if (!VIEWS[view]) view = "discover";
+    closeDetail();
     state.view = view;
-    document.body.className = "view-" + view + " embed" + (document.body.classList.contains("sheet-open") ? " sheet-open" : "");
+    document.body.className = "view-" + view + " embed" +
+      (document.body.classList.contains("sheet-open") ? " sheet-open" : "");
     Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (t) {
       t.classList.toggle("is-active", t.getAttribute("data-tab") === view);
     });
     document.title = "Fitness · " + VIEWS[view];
-
-    if (!(opts && opts.fromHash)) syncUrl(view, true);
+    syncPageHeader(view);
+    if (!(opts && opts.fromHash)) syncUrl(view);
 
     if (view === "passes") renderPasses();
     else if (view === "events") {
       renderWeekStrip();
       renderCalendar();
     } else {
+      renderFeatured();
       renderBuildingGyms();
       renderTeaser();
       renderGrid();
     }
-
-    if (!(opts && opts.silent)) {
-      window.scrollTo(0, 0);
-    }
+    if (!(opts && opts.silent)) window.scrollTo(0, 0);
   }
 
   function toast(msg) {
@@ -839,25 +1133,30 @@
   chipsWrap.addEventListener("click", function (e) {
     var chip = e.target.closest(".chip");
     if (!chip) return;
-    state.filter = chip.getAttribute("data-filter");
-    Array.prototype.forEach.call(chipsWrap.children, function (c) {
-      c.classList.toggle("is-active", c === chip);
-    });
-    renderGrid();
+    setFilter(chip.getAttribute("data-filter"));
   });
+
+  var filterSelect = document.getElementById("filter-select");
+  if (filterSelect) {
+    filterSelect.addEventListener("change", function () {
+      setFilter(filterSelect.value);
+    });
+  }
 
   searchInput.addEventListener("input", function () {
     state.query = searchInput.value;
     renderGrid();
   });
 
+  document.getElementById("detail-back").addEventListener("click", closeDetail);
+
   document.addEventListener("click", function (e) {
     var t = e.target;
 
-    // Navigate first — buttons often combine data-goto + data-sheet-close
     var goto = t.closest("[data-goto]");
     if (goto) {
       closeSheet();
+      closeDetail();
       setView(goto.getAttribute("data-goto"));
       return;
     }
@@ -867,10 +1166,28 @@
       return;
     }
 
-    var signup = t.closest("[data-signup]");
-    if (signup) {
-      var g = BUILDING_GYMS.find(function (x) { return x.id === signup.getAttribute("data-signup"); });
-      if (g) openSignupSheet(g);
+    var detailGym = t.closest("[data-detail-gym]");
+    if (detailGym) {
+      openDetail({ kind: "gym", id: detailGym.getAttribute("data-detail-gym") });
+      return;
+    }
+
+    var detailStudio = t.closest("[data-detail-studio]");
+    if (detailStudio) {
+      openDetail({ kind: "studio", id: detailStudio.getAttribute("data-detail-studio") });
+      return;
+    }
+
+    var detailEvent = t.closest("[data-detail-event]");
+    if (detailEvent) {
+      openDetail({ kind: "event", id: detailEvent.getAttribute("data-detail-event") });
+      return;
+    }
+
+    // legacy data-event → detail
+    var legacyEvent = t.closest("[data-event]");
+    if (legacyEvent) {
+      openDetail({ kind: "event", id: legacyEvent.getAttribute("data-event") });
       return;
     }
 
@@ -893,7 +1210,6 @@
         getPass(saveCard.getAttribute("data-save-pass-card"));
       if (sp) {
         renderQrCanvas(document.querySelector("#qr-wrap"), sp.code);
-        // draw after QR paints
         setTimeout(function () { savePassCardImage(sp); }, 80);
       }
       return;
@@ -906,23 +1222,14 @@
       return;
     }
 
-    var eventBtn = t.closest("[data-event]");
-    if (eventBtn) {
-      var ev = findEvent(eventBtn.getAttribute("data-event"));
-      if (ev) openEventSheet(ev);
-      return;
-    }
-
     var confirmRsvp = t.closest("[data-confirm-rsvp]");
     if (confirmRsvp) {
       var eid = confirmRsvp.getAttribute("data-confirm-rsvp");
       addRsvp(eid);
       toast("RSVP confirmed — saved to My Passes");
-      var eventObj = findEvent(eid);
-      if (eventObj) openEventSheet(eventObj);
+      openDetail({ kind: "event", id: eid });
       renderDayEvents();
       renderTeaser();
-      renderWeekStrip();
       if (state.view === "passes") renderPasses();
       return;
     }
@@ -932,8 +1239,7 @@
       var cid = cancelRsvp.getAttribute("data-cancel-rsvp");
       removeRsvp(cid);
       toast("RSVP canceled");
-      var canceled = findEvent(cid);
-      if (canceled) openEventSheet(canceled);
+      openDetail({ kind: "event", id: cid });
       renderDayEvents();
       renderTeaser();
       if (state.view === "passes") renderPasses();
@@ -941,7 +1247,9 @@
   });
 
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && !sheet.hidden) closeSheet();
+    if (e.key !== "Escape") return;
+    if (!sheet.hidden) closeSheet();
+    else if (!detailPage.hidden) closeDetail();
   });
 
   document.querySelector(".tabs").addEventListener("click", function (e) {
@@ -966,16 +1274,32 @@
     renderWeekStrip();
   });
 
-  // Hash only for deep links / share — never push history on tab change
   window.addEventListener("hashchange", function () {
     var view = location.hash.replace(/^#/, "") || "discover";
     if (view === "membership") view = "passes";
     setView(view, { fromHash: true, silent: true });
   });
 
-  // Boot
   var chip = document.getElementById("building-chip");
   if (chip) chip.textContent = BUILDING.name;
+
+  var perkNext = document.getElementById("perk-next");
+  var perkSkip = document.getElementById("perk-skip");
+  if (perkNext) {
+    perkNext.addEventListener("click", function () {
+      if (perkStep >= PERK_STEPS.length - 1) {
+        dismissPerkIntro(true);
+        return;
+      }
+      perkStep += 1;
+      renderPerkStep();
+    });
+  }
+  if (perkSkip) {
+    perkSkip.addEventListener("click", function () {
+      dismissPerkIntro(false);
+    });
+  }
 
   buildEvents();
   var today = startOfDay(new Date());
